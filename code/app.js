@@ -1132,6 +1132,31 @@
     }
   }
 
+  function downloadTemplate() {
+    var csv = [
+      "sku,product_name,inventory_on_hand,units_sold_30d,units_sold_90d,lead_time_days,unit_cost,vendor,category,reorder_multiple,incoming_units,committed_units",
+      "SKU-1001,Bamboo Storage Bin - Small,42,90,260,28,8.50,Northstar Home,Storage,12,0,10",
+      "SKU-1002,Bamboo Storage Bin - Large,18,72,210,35,12.25,Northstar Home,Storage,12,24,0",
+      "SKU-1003,Silicone Travel Bottle Set,240,12,35,21,3.10,Blue Ridge Goods,Travel,24,0,5"
+    ].join("\r\n");
+    try {
+      var blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = "inventory-template.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function revoke() { URL.revokeObjectURL(url); }, 1500);
+    } catch (downloadError) {
+      try {
+        var uri = "data:text/csv;charset=utf-8," + encodeURIComponent(csv);
+        window.open(uri, "_blank");
+      } catch (fallbackError) { /* no-op */ }
+    }
+  }
+
   function readStoredEmail() {
     try { return window.localStorage.getItem(EMAIL_KEY); } catch (e) { return null; }
   }
@@ -1317,11 +1342,13 @@
   function initUi() {
     document.addEventListener("click", function onClick(event) {
       var sampleButton = event.target.closest("[data-sample-button]");
+      var templateButton = event.target.closest("[data-template-button]");
       var gateOpen = event.target.closest("[data-gate-open]");
       var gateSubmit = event.target.closest("[data-gate-submit]");
       var reDownload = event.target.closest("[data-gate-redownload]");
 
       if (sampleButton) loadSample();
+      if (templateButton) { event.preventDefault(); downloadTemplate(); track("template_downloaded"); }
       if (gateOpen) openGateForm(gateOpen.closest("[data-gate]"));
       if (gateSubmit) submitGate(gateSubmit.closest("[data-gate]"));
       if (reDownload) {
