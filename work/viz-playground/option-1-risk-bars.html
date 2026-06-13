@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Inventory Stockout Risk Checker — Option 1 · Risk Bars</title>
+<style>
+  :root{
+    --page-bg:#f5f7fb;
+    --card:#fff;
+    --border:#e6ebf2;
+    --ink:#0f172a;
+    --muted:#64748b;
+    --grad-a:#8a72c8;
+    --grad-b:#6f6bc0;
+    --brand:#6253a0;
+    --brand-soft:#f4f2fb;
+
+    --expedite:#dc2626;  --expedite-soft:#fde7e7;
+    --reorder:#ea580c;   --reorder-soft:#fff1e3;
+    --hold:#15803d;      --hold-soft:#e6f8ee;
+    --deadstock:#6d5bb0; --deadstock-soft:#eee9f7;
+
+    --radius:12px;
+    --shadow:0 6px 18px rgba(15,23,42,.07);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--page-bg);
+    color:var(--ink);
+    font-family:ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .shell{
+    max-width:1080px;
+    margin:0 auto;
+    padding:28px 24px 56px;
+  }
+
+  /* ---------- Header ---------- */
+  .topbar{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:14px 20px;
+  }
+  .logo{
+    width:28px;height:28px;flex:0 0 28px;
+    border-radius:8px;
+    background:linear-gradient(135deg,var(--grad-a),var(--grad-b));
+    color:#fff;
+    font-weight:700;
+    font-size:15px;
+    display:flex;align-items:center;justify-content:center;
+    letter-spacing:.5px;
+  }
+  .titles{display:flex;flex-direction:column;min-width:0;}
+  .titles h1{
+    margin:0;
+    font-size:16px;
+    font-weight:650;
+    letter-spacing:-.2px;
+    color:var(--ink);
+  }
+  .titles p{
+    margin:1px 0 0;
+    font-size:12.5px;
+    color:var(--muted);
+  }
+  .badge{
+    margin-left:auto;
+    flex:0 0 auto;
+    background:var(--brand-soft);
+    color:var(--brand);
+    border:1px solid #e3def5;
+    font-size:12px;
+    font-weight:600;
+    padding:6px 12px;
+    border-radius:999px;
+    white-space:nowrap;
+  }
+
+  /* ---------- Card ---------- */
+  .card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:26px 30px 24px;
+    margin-top:20px;
+  }
+
+  .chart-head{
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap:18px;
+    flex-wrap:wrap;
+    margin-bottom:4px;
+  }
+  .chart-head h2{
+    margin:0;
+    font-size:18px;
+    font-weight:650;
+    letter-spacing:-.2px;
+  }
+  .summary{
+    margin:6px 0 0;
+    font-size:13.5px;
+    color:var(--muted);
+  }
+  .summary strong{color:var(--ink);font-weight:650;}
+
+  /* Legend */
+  .legend{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px 18px;
+    align-items:center;
+    margin-top:2px;
+  }
+  .legend .item{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    font-size:12.5px;
+    color:#475569;
+    white-space:nowrap;
+  }
+  .legend .swatch{
+    width:13px;height:13px;border-radius:4px;display:inline-block;
+  }
+  .sw-exp{background:var(--expedite);}
+  .sw-reo{background:var(--reorder);}
+  .sw-hold{background:var(--hold);}
+  .sw-dead{background:var(--deadstock);}
+
+  .divider{
+    height:1px;background:var(--border);
+    border:0;margin:18px 0 6px;
+  }
+
+  /* SVG wrap */
+  .chart-wrap{width:100%;}
+  svg.chart{display:block;width:100%;height:auto;}
+
+  .axis-label{fill:var(--muted);font-size:12px;}
+  .axis-tick{fill:#94a3b8;font-size:11px;}
+  .grid-line{stroke:#eef2f8;stroke-width:1;}
+  .sku-id{fill:var(--ink);font-size:12.5px;font-weight:650;}
+  .sku-name{fill:var(--muted);font-size:11px;}
+  .bar{rx:5;}
+  .days-val{font-size:12.5px;font-weight:650;}
+  .danger-band-fill{fill:#fde7e7;opacity:.45;}
+  .danger-band-label{fill:#b91c1c;font-size:10.5px;font-weight:600;letter-spacing:.2px;}
+  .cap-line{stroke:#cbd5e1;stroke-width:1;stroke-dasharray:3 3;}
+
+  /* Action chip (HTML overlay style rendered in SVG via foreignObject avoided — use SVG rects) */
+  .chip-text{font-size:10px;font-weight:700;letter-spacing:.3px;}
+
+  .caption{
+    margin:16px 0 0;
+    font-size:13px;
+    color:#475569;
+    background:var(--brand-soft);
+    border:1px solid #e9e4f7;
+    border-radius:10px;
+    padding:11px 14px;
+  }
+  .caption b{color:var(--brand);}
+  .footnote{
+    margin:12px 2px 0;
+    font-size:11.5px;
+    color:#94a3b8;
+  }
+
+  /* Tooltip */
+  #tooltip{
+    position:fixed;
+    pointer-events:none;
+    z-index:50;
+    background:#0f172a;
+    color:#f8fafc;
+    border-radius:8px;
+    padding:9px 11px;
+    font-size:11.5px;
+    line-height:1.45;
+    box-shadow:0 8px 22px rgba(15,23,42,.28);
+    opacity:0;
+    transition:opacity .08s ease;
+    max-width:230px;
+  }
+  #tooltip .tt-title{font-weight:700;font-size:12px;margin-bottom:2px;}
+  #tooltip .tt-row{color:#cbd5e1;}
+  #tooltip .tt-row b{color:#fff;font-weight:650;}
+  .bar-hit{cursor:default;}
+  .row-band:hover .bar{filter:brightness(.96);}
+</style>
+</head>
+<body>
+  <div class="shell">
+
+    <!-- HEADER -->
+    <header class="topbar">
+      <div class="logo">D</div>
+      <div class="titles">
+        <h1>Inventory Stockout Risk Checker</h1>
+        <p>Weekly stockout &amp; deadstock review · sample data (10 SKUs)</p>
+      </div>
+      <span class="badge">Option 1 · Risk Bars</span>
+    </header>
+
+    <!-- CHART CARD -->
+    <section class="card">
+      <div class="chart-head">
+        <div>
+          <h2>Days of stock left, by product</h2>
+          <p class="summary"><strong>7 of 10 SKUs need action this week</strong> — 4 to expedite now, 3 deadstock to clear.</p>
+        </div>
+        <div class="legend" aria-label="Color legend">
+          <span class="item"><span class="swatch sw-exp"></span>Expedite — order today</span>
+          <span class="item"><span class="swatch sw-hold"></span>Hold — stock is healthy</span>
+          <span class="item"><span class="swatch sw-dead"></span>Deadstock — cash stuck</span>
+        </div>
+      </div>
+
+      <hr class="divider" />
+
+      <div class="chart-wrap">
+        <!--
+          GEOMETRY (viewBox 0 0 1020 560)
+          Plot area X: labelW=232 (left gutter for SKU + name)
+                      plotX0 = 248, plotX1 = 900  -> plotW = 652
+          Right gutter for value + chip: 900 .. 1020
+          Axis scale: 0..120 days mapped to plotX0..plotX1
+            px per day = 652/120 = 5.4333
+          Danger zone: 0..30 days
+          Rows: top axis at y=40 area; first bar baseline starts at y=70
+            rowH = 44 ; barH = 22 ; bar vertical offset within row = 9
+        -->
+        <svg class="chart" viewBox="0 0 1020 560" role="img"
+             aria-label="Horizontal bar chart of days of stock left per SKU, colored by recommended action.">
+
+          <!-- ===== Danger band (0-30 days) ===== -->
+          <!-- band x from plotX0=248 to 248 + 30*5.4333 = 248+163 = 411 -->
+          <rect class="danger-band-fill" x="248" y="58" width="163" height="440"></rect>
+          <line x1="411" y1="58" x2="411" y2="498" stroke="#f4cdcd" stroke-width="1"></line>
+          <text class="danger-band-label" x="252" y="73">LEAD-TIME DANGER ZONE (under ~30 days)</text>
+
+          <!-- ===== Vertical gridlines & axis ticks (top) ===== -->
+          <!-- ticks at 0,30,60,90,120  px = 248,411,574,737,900 -->
+          <g>
+            <line class="grid-line" x1="248" y1="58" x2="248" y2="498"></line>
+            <line class="grid-line" x1="411" y1="58" x2="411" y2="498"></line>
+            <line class="grid-line" x1="574" y1="58" x2="574" y2="498"></line>
+            <line class="grid-line" x1="737" y1="58" x2="737" y2="498"></line>
+            <line class="grid-line" x1="900" y1="58" x2="900" y2="498"></line>
+
+            <text class="axis-tick" x="248" y="50" text-anchor="middle">0</text>
+            <text class="axis-tick" x="411" y="50" text-anchor="middle">30</text>
+            <text class="axis-tick" x="574" y="50" text-anchor="middle">60</text>
+            <text class="axis-tick" x="737" y="50" text-anchor="middle">90</text>
+            <text class="axis-tick" x="900" y="50" text-anchor="middle">120</text>
+          </g>
+          <!-- axis title -->
+          <text class="axis-label" x="574" y="26" text-anchor="middle" font-weight="600">Days of stock remaining at current sales pace  →</text>
+          <!-- cap marker -->
+          <line class="cap-line" x1="900" y1="58" x2="900" y2="510"></line>
+          <text class="axis-tick" x="903" y="510" text-anchor="start">axis capped at 120 days</text>
+
+          <!--
+            ROWS — sorted by urgency (smallest days_cover first; deadstock last)
+            row baseline (rect y) computed: firstY=70, step=44
+            bar y values: 70,114,158,202,246,290,334,378,422,466
+            label text baseline: bar y + 15 (id) and +27 (name)  -> centered-ish
+            bar value mapping helper:
+              clamp(days,0,120) -> width = clamped*5.4333
+          -->
+
+          <!-- ROW 1: SKU-1004 days 1.2 EXPEDITE -> width=1.2*5.4333=6.52 -->
+          <g class="row-band" data-id="SKU-1004" data-name="Cotton Drawer Organizer"
+             data-action="EXPEDITE" data-days="1.2 days" data-onhand="6" data-sold30="48"
+             data-lead="30" data-extra="Reorder 108 units · $513 to restock">
+            <text class="sku-id"   x="0" y="84">SKU-1004</text>
+            <text class="sku-name" x="0" y="98">Cotton Drawer Organizer</text>
+            <rect class="bar" x="248" y="70" width="6.5" height="22" fill="#dc2626"></rect>
+            <text class="days-val" x="262" y="86" fill="#b91c1c">1.2 days</text>
+            <!-- chip -->
+            <g transform="translate(330,73)">
+              <rect width="76" height="17" rx="8.5" fill="#fde7e7" stroke="#f6c9c9"></rect>
+              <text class="chip-text" x="38" y="12" text-anchor="middle" fill="#b91c1c">EXPEDITE</text>
+            </g>
+            <rect class="bar-hit" x="0" y="70" width="1020" height="22" fill="transparent"></rect>
+          </g>
+
+          <!-- ROW 2: SKU-1001 days 10.7 EXPEDITE -> width=10.7*5.4333=58.1 -->
+          <g class="row-band" data-id="SKU-1001" data-name="Bamboo Storage Bin S"
+             data-action="EXPEDITE" data-days="10.7 days" data-onhand="42" data-sold30="90"
+             data-lead="28" data-extra="Reorder 144 units · $1,224 to restock">
+            <text class="sku-id"   x="0" y="128">SKU-1001</text>
+            <text class="sku-name" x="0" y="142">Bamboo Storage Bin S</text>
+            <rect class="bar" x="248" y="114" width="58.1" height="22" fill="#dc2626"></rect>
+            <text class="days-val" x="313" y="130" fill="#b91c1c">10.7 days</text>
+            <g transform="translate(382,117)">
+              <rect width="76" height="17" rx="8.5" fill="#fde7e7" stroke="#f6c9c9"></rect>
+              <text class="chip-text" x="38" y="12" text-anchor="middle" fill="#b91c1c">EXPEDITE</text>
+            </g>
+            <rect class="bar-hit" x="0" y="114" width="1020" height="22" fill="transparent"></rect>
+          </g>
+
+          <!-- ROW 3: SKU-1007 days 16.4 EXPEDITE -> width=16.4*5.4333=89.1 -->
+          <g class="row-band" data-id="SKU-1007" data-name="Glass Meal Prep 3pk"
+             data-action="EXPEDITE" data-days="16.4 days" data-onhand="12" data-sold30="6"
+             data-lead="60" data-extra="Reorder 18 units · $194 to restock · long 60-day lead time">
+            <text class="sku-id"   x="0" y="172">SKU-1007</text>
+            <text class="sku-name" x="0" y="186">Glass Meal Prep 3pk</text>
+            <rect class="bar" x="248" y="158" width="89.1" height="22" fill="#dc2626"></rect>
+            <text class="days-val" x="344" y="174" fill="#b91c1c">16.4 days</text>
+            <g transform="translate(413,161)">
+              <rect width="76" height="17" rx="8.5" fill="#fde7e7" stroke="#f6c9c9"></rect>
+              <text class="chip-text" x="38" y="12" text-anchor="middle" fill="#b91c1c">EXPEDITE</text>
+            </g>
+            <rect class="bar-hit" x="0" y="158" width="1020" height="22" fill="transparent"></rect>
+          </g>
+
+          <!-- ROW 4: SKU-1002 days 17.5 EXPEDITE -> width=17.5*5.4333=95.1 -->
+          <g class="row-band" data-id="SKU-1002" data-name="Bamboo Storage Bin L"
+             data-action="EXPEDITE" data-days="17.5 days" data-onhand="18" data-sold30="72"
+             data-lead="35" data-extra="Reorder 120 units · $1,470 to restock">
+            <text class="sku-id"   x="0" y="216">SKU-1002</text>
+            <text class="sku-name" x="0" y="230">Bamboo Storage Bin L</text>
+            <rect class="bar" x="248" y="202" width="95.1" height="22" fill="#dc2626"></rect>
+            <text class="days-val" x="350" y="218" fill="#b91c1c">17.5 days</text>
+            <g transform="translate(419,205)">
+              <rect width="76" height="17" rx="8.5" fill="#fde7e7" stroke="#f6c9c9"></rect>
+              <text class="chip-text" x="38" y="12" text-anchor="middle" fill="#b91c1c">EXPEDITE</text>
+            </g>
+            <rect class="bar-hit" x="0" y="202" width="1020" height="22" fill="transparent"></rect>
+          </g>
+
+          <!-- ROW 5: SKU-1008 days 48 HOLD -> width=48*5.4333=260.8 -->
+          <g class="row-band" data-id="SKU-1008" data-name="Linen Closet Divider"
+             data-action="HOLD" data-days="48 days" data-onhand="0 (40 incoming)" data-sold30="25"
+             data-lead="28" data-extra="Restock already on the way — no action needed">
+            <text class="sku-id"   x="0" y="260">SKU-1008</text>
+            <text class="sku-name" x="0" y="274">Linen Closet Divider</text>
+            <rect class="bar" x="248" y="246" width="260.8" height="22" fill="#15803d"></rect>
+            <text class="days-val" x="516" y="262" fill="#15803d">48 days</text>
+            <g transform="translate(575,249)">
+              <rect width="52" height="17" rx="8.5" fill="#e6f8ee" stroke="#c6ecd5"></rect>
+              <text class="chip-text" x="26" y="12" text-anchor="middle" fill="#15803d">HOLD</text>
+            </g>
+            <rect class="bar-hit" x="0" y="246" width="1020" height="22" fill="transparent"></rect>
+          </g>
+
+          <!-- ROW 6: SKU-1006 days 83 HOLD -> width=83*5.4333=451 -->
+          <g class="row-band" data-id="SKU-1006" data-name="Magnetic Spice Labels"
+             data-action="HOLD" data-days="83 days" data-onhand="88" data-sold30="30"
+             data-lead="14" data-extra="Comfortable buffer — recheck next week">
+            <text class="sku-id"   x="0" y="304">SKU-1006</text>
+            <text class="sku-name" x="0" y="318">Magnetic Spice Labels</text>
+            <rect class="bar" x="248" y="290" width="451" height="22" fill="#15803d"></rect>
+            <text class="days-val" x="706" y="306" fill="#15803d">83 days</text>
+            <g transform="translate(765,293)">
+              <rect width="52" height="17" rx="8.5" fill="#e6f8ee" stroke="#c6ecd5"></rect>
+              <text class="chip-text" x="26" y="12" text-anchor="middle" fill="#15803d">HOLD</text>
+            </g>
+            <rect class="bar-hit" x="0" y="290" width="1020" height="22" fill="transparent"></rect>
+          </g>
+
+          <!-- ROW 7: SKU-1009 days 95 HOLD -> width=95*5.4333=516.2 -->
+          <g class="row-band" data-id="SKU-1009" data-name="Compostable Mailer 50pk"
+             data-action="HOLD" data-days="95 days" data-onhand="500" data-sold30="150"
+             data-lead="20" data-extra="Plenty in stock — fast seller, watch the pace">
+            <text class="sku-id"   x="0" y="348">SKU-1009</text>
+            <text class="sku-name" x="0" y="362">Compostable Mailer 50pk</text>
+            <rect class="bar" x="248" y="334" width="516.2" height="22" fill="#15803d"></rect>
+            <text class="days-val" x="771" y="350" fill="#15803d">95 days</text>
+            <g transform="translate(830,337)">
+              <rect width="52" height="17" rx="8.5" fill="#e6f8ee" stroke="#c6ecd5"></rect>
+              <text class="chip-text" x="26" y="12" text-anchor="middle" fill="#15803d">HOLD</text>
+            </g>
+            <rect class="bar-hit" x="0" y="334" width="1020" height="22" fill="transparent"></rect>
+          </g>
+
+          <!-- ===== Deadstock separator ===== -->
+          <line x1="0" y1="408" x2="1010" y2="408" stroke="#eee9f7" stroke-width="1"></line>
+          <text x="0" y="403" class="sku-name" fill="#6d5bb0" font-weight="600">DEADSTOCK · capped bars — true days labelled, cash is frozen here</text>
+
+          <!-- ROW 8: SKU-1005 DEADSTOCK no sales -> capped full bar to 120 (width 652) -->
+          <g class="row-band" data-id="SKU-1005" data-name="Reusable Produce Bag Set"
+             data-action="DEADSTOCK" data-days="No recent sales" data-onhand="310" data-sold30="0"
+             data-lead="45" data-extra="$682 cash tied up · 0 sold in 90 days — consider a clearance">
+            <text class="sku-id"   x="0" y="436">SKU-1005</text>
+            <text class="sku-name" x="0" y="450">Reusable Produce Bag Set</text>
+            <rect class="bar" x="248" y="422" width="652" height="22" fill="#6d5bb0"></rect>
+            <text class="days-val" x="888" y="438" text-anchor="end" fill="#fff">no sales · $682 stuck</text>
+            <g transform="translate(906,425)">
+              <rect width="84" height="17" rx="8.5" fill="#eee9f7" stroke="#dcd3f0"></rect>
+              <text class="chip-text" x="42" y="12" text-anchor="middle" fill="#6d5bb0">DEADSTOCK</text>
+            </g>
+            <rect class="bar-hit" x="0" y="422" width="1020" height="22" fill="transparent"></rect>
+          </g>
+
+          <!-- ROW 9: SKU-1003 DEADSTOCK 587 days -> capped (width 652) -->
+          <g class="row-band" data-id="SKU-1003" data-name="Silicone Travel Bottle Set"
+             data-action="DEADSTOCK" data-days="587 days" data-onhand="240" data-sold30="12"
+             data-lead="21" data-extra="$744 cash tied up · 587 days of stock — clear it down">
+            <text class="sku-id"   x="0" y="480">SKU-1003</text>
+            <text class="sku-name" x="0" y="494">Silicone Travel Bottle Set</text>
+            <rect class="bar" x="248" y="466" width="652" height="22" fill="#6d5bb0"></rect>
+            <text class="days-val" x="888" y="482" text-anchor="end" fill="#fff">587 days · $744 stuck</text>
+            <g transform="translate(906,469)">
+              <rect width="84" height="17" rx="8.5" fill="#eee9f7" stroke="#dcd3f0"></rect>
+              <text class="chip-text" x="42" y="12" text-anchor="middle" fill="#6d5bb0">DEADSTOCK</text>
+            </g>
+            <rect class="bar-hit" x="0" y="466" width="1020" height="22" fill="transparent"></rect>
+          </g>
+
+          <!-- ROW 10: SKU-1010 DEADSTOCK 1,791 days -> capped (width 652) -->
+          <g class="row-band" data-id="SKU-1010" data-name="Holiday Gift Wrap Bundle"
+             data-action="DEADSTOCK" data-days="1,791 days (off-season)" data-onhand="120" data-sold30="0"
+             data-lead="50" data-extra="$870 cash tied up · seasonal — revisit before holidays">
+            <text class="sku-id"   x="0" y="524">SKU-1010</text>
+            <text class="sku-name" x="0" y="538">Holiday Gift Wrap Bundle</text>
+            <rect class="bar" x="248" y="510" width="652" height="22" fill="#6d5bb0"></rect>
+            <text class="days-val" x="888" y="526" text-anchor="end" fill="#fff">1,791 days · $870 stuck</text>
+            <g transform="translate(906,513)">
+              <rect width="84" height="17" rx="8.5" fill="#eee9f7" stroke="#dcd3f0"></rect>
+              <text class="chip-text" x="42" y="12" text-anchor="middle" fill="#6d5bb0">DEADSTOCK</text>
+            </g>
+            <rect class="bar-hit" x="0" y="510" width="1020" height="22" fill="transparent"></rect>
+          </g>
+
+        </svg>
+      </div>
+
+      <p class="caption"><b>How to read this:</b> Each bar is how many days of stock you have left — the shorter and redder the bar, the sooner you run out. Bars inside the pink band can&rsquo;t be restocked before they hit zero, so order those today.</p>
+
+      <p class="footnote">Note: the days axis is capped at 120 for readability. Violet deadstock bars are stretched to the cap with their true value shown (e.g. 587, 1,791 days) so slow movers don&rsquo;t flatten the urgent red bars. Cash frozen in deadstock: $2,296 · Cash needed to reorder expedite items: $3,401.</p>
+
+    </section>
+  </div>
+
+  <div id="tooltip" role="status" aria-live="polite"></div>
+
+  <script>
+    (function(){
+      var tip = document.getElementById('tooltip');
+      var rows = document.querySelectorAll('.row-band');
+
+      function esc(s){ return (s==null?'':String(s)); }
+
+      function show(g, evt){
+        var d = g.dataset;
+        var actionColors = {
+          EXPEDITE:'#fca5a5', REORDER:'#fdba74', HOLD:'#86efac', DEADSTOCK:'#c4b5fd'
+        };
+        var ac = actionColors[d.action] || '#cbd5e1';
+        tip.innerHTML =
+          '<div class="tt-title">'+esc(d.id)+' · '+esc(d.name)+'</div>' +
+          '<div class="tt-row">Action: <b style="color:'+ac+'">'+esc(d.action)+'</b></div>' +
+          '<div class="tt-row">Days of stock: <b>'+esc(d.days)+'</b></div>' +
+          '<div class="tt-row">On hand: <b>'+esc(d.onhand)+'</b> · sold 30d: <b>'+esc(d.sold30)+'</b></div>' +
+          '<div class="tt-row">Lead time: <b>'+esc(d.lead)+' days</b></div>' +
+          '<div class="tt-row" style="margin-top:3px">'+esc(d.extra)+'</div>';
+        tip.style.opacity = '1';
+        move(evt);
+      }
+      function move(evt){
+        var pad = 14;
+        var x = evt.clientX + pad;
+        var y = evt.clientY + pad;
+        var w = tip.offsetWidth, h = tip.offsetHeight;
+        if (x + w > window.innerWidth - 8) x = evt.clientX - w - pad;
+        if (y + h > window.innerHeight - 8) y = evt.clientY - h - pad;
+        tip.style.left = x + 'px';
+        tip.style.top = y + 'px';
+      }
+      function hide(){ tip.style.opacity = '0'; }
+
+      rows.forEach(function(g){
+        g.addEventListener('mouseenter', function(e){ show(g, e); });
+        g.addEventListener('mousemove', move);
+        g.addEventListener('mouseleave', hide);
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,1925 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Inventory Stockout Risk Checker</title>
+    <meta name="description" content="Upload an inventory CSV and see stockout risk, deadstock candidates, reorder quantities, and the cash on the line — computed locally in your browser, nothing uploaded.">
+    <link rel="icon" href="data:,">
+    <script>
+      /* No-flash theme bootstrap: runs before the stylesheet paints.
+         Priority: ?theme=light|dark  →  localStorage(docktoai_theme)  →  light. */
+      (function bootstrapTheme() {
+        function valid(value) { return value === "light" || value === "dark"; }
+        var theme = "light";
+        try {
+          var query = new URLSearchParams(window.location.search).get("theme");
+          if (valid(query)) theme = query;
+          else {
+            var saved = localStorage.getItem("docktoai_theme");
+            if (valid(saved)) theme = saved;
+          }
+        } catch (error) { /* private mode / no URL API — fall back to light */ }
+        document.documentElement.setAttribute("data-theme", theme);
+      })();
+    </script>
+    <style>
+/* ============================================================
+   Inventory Stockout Risk Checker — chart-led weekly dashboard
+   Self-contained: system fonts only, no external assets.
+   ============================================================ */
+
+:root {
+  /* surfaces */
+  --page: #f5f7fb;
+  --card: #ffffff;
+  --border: #e6ebf2;
+  --grid: #eef2f8;
+  --ink: #0f172a;
+  --muted: #64748b;
+  --faint: #94a3b8;
+
+  /* brand */
+  --brand-a: #8a72c8;
+  --brand-b: #6f6bc0;
+  --brand-solid: #6253a0;
+  --brand-ink: #4f4189;
+  --brand-soft: #f4f2fb;
+  --brand-line: #e4def3;
+
+  /* risk colors — data marks only */
+  --exp: #dc2626;  --exp-bg: #fde7e7;
+  --reo: #ea580c;  --reo-bg: #fff1e3;
+  --hold: #15803d; --hold-bg: #e6f8ee;
+  --dead: #6d5bb0; --dead-bg: #eee9f7;
+  --review: #475569; --review-bg: #eef2f7;
+
+  --radius: 14px;
+  --radius-sm: 10px;
+  --pill: 999px;
+  --shadow: 0 6px 18px rgba(15, 23, 42, .07);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, .06);
+  --font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* ------------------------------------------------------------
+   DARK THEME — overrides the neutrals; risk hues stay
+   recognizable (slightly brightened for contrast on dark).
+   Every surface/text/border/gridline above is a token, so the
+   whole UI + the inline-SVG charts recolor with no re-render.
+   ------------------------------------------------------------ */
+:root[data-theme="dark"] {
+  /* surfaces */
+  --page: #0e1320;
+  --card: #171e2e;
+  --border: #28303f;
+  --grid: #2a3444;
+  --ink: #e7ecf5;
+  --muted: #9aa6b8;
+  --faint: #6b7689;
+
+  /* brand — keep the gradient (it pops on dark) */
+  --brand-solid: #a99ce4;
+  --brand-ink: #cfc6f2;
+  --brand-soft: #221f33;
+  --brand-line: #352e50;
+
+  /* risk colors — brightened, with deep soft backgrounds */
+  --exp: #f0635c;  --exp-bg: #3a1f22;
+  --reo: #f7873a;  --reo-bg: #3a2618;
+  --hold: #36c98c; --hold-bg: #15301f;
+  --dead: #a48fe6; --dead-bg: #241f36;
+  --review: #9aa6b8; --review-bg: #222a38;
+
+  --shadow: 0 8px 24px rgba(0, 0, 0, .45);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+}
+:root[data-theme="dark"] { color-scheme: dark; }
+
+/* dark-mode surfaces that can't be expressed by a single token */
+:root[data-theme="dark"] .topbar { background: rgba(23, 30, 46, .82); }
+:root[data-theme="dark"] .error-panel { border-color: #5a2c2c; color: #f6b7b4; }
+:root[data-theme="dark"] .runway-legend { border-color: var(--brand-line); }
+:root[data-theme="dark"] .runway-legend .item { color: var(--muted); }
+:root[data-theme="dark"] .gate {
+  background: linear-gradient(135deg, #1d2233 0%, #221f33 100%);
+}
+:root[data-theme="dark"] .gate-success { border-color: #1f5a3a; color: #8fe5b4; }
+:root[data-theme="dark"] #tooltip { background: #050912; box-shadow: 0 10px 26px rgba(0, 0, 0, .6); }
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+html { color-scheme: light; }
+body {
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+h1, h2, h3 { margin: 0; }
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--brand-soft); color: var(--brand-ink);
+  padding: 1px 5px; border-radius: 5px; font-size: .85em;
+}
+[hidden] { display: none !important; }
+
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 28px 64px; }
+
+/* ============ 1 · HEADER ============ */
+.topbar {
+  position: sticky; top: 0; z-index: 30;
+  background: rgba(255, 255, 255, .9);
+  backdrop-filter: saturate(140%) blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+.topbar-inner {
+  max-width: 1120px; margin: 0 auto; padding: 14px 28px;
+  display: flex; align-items: center; gap: 14px;
+}
+.logo {
+  width: 32px; height: 32px; flex: 0 0 32px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--brand-a), var(--brand-b));
+  color: #fff; font-weight: 800; font-size: 17px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 12px rgba(98, 83, 160, .35);
+}
+.titles { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.titles h1 { font-size: 16.5px; font-weight: 700; letter-spacing: -.01em; }
+.titles .sub { font-size: 12.5px; color: var(--muted); margin-top: 1px; }
+
+.topbar-actions { display: flex; gap: 8px; margin-left: auto; flex: 0 0 auto; }
+.btn-primary, .btn-ghost {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 15px; border-radius: 10px; font-weight: 700; white-space: nowrap;
+  transition: transform .12s ease, box-shadow .15s ease, background .15s ease;
+}
+.btn-primary {
+  border: 0; color: #fff;
+  background: linear-gradient(135deg, var(--brand-a), var(--brand-b));
+  box-shadow: 0 8px 18px rgba(120, 110, 190, .32);
+}
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 12px 24px rgba(120, 110, 190, .4); }
+.btn-ghost { border: 1px solid var(--border); background: var(--card); color: var(--ink); box-shadow: var(--shadow-sm); }
+.btn-ghost:hover { transform: translateY(-1px); box-shadow: var(--shadow); border-color: var(--brand-line); }
+.btn-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; flex: 0 0 36px; padding: 0;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--card); color: var(--muted); box-shadow: var(--shadow-sm);
+  font-size: 16px; line-height: 1;
+  transition: transform .12s ease, box-shadow .15s ease, border-color .15s ease, color .15s ease;
+}
+.btn-icon:hover { transform: translateY(-1px); box-shadow: var(--shadow); border-color: var(--brand-line); color: var(--brand-solid); }
+.btn-icon svg { display: block; width: 17px; height: 17px; }
+
+/* ============ ERROR PANEL ============ */
+.error-panel {
+  margin-top: 22px; padding: 16px 20px;
+  background: var(--exp-bg); border: 1px solid #f4c7c4; border-radius: var(--radius);
+  color: #991b1b; box-shadow: var(--shadow-sm);
+}
+.error-panel h2 { font-size: 15px; margin-bottom: 4px; }
+.error-panel p { margin: 0 0 8px; }
+.error-panel ul { margin: 8px 0 0; padding-left: 18px; }
+.error-panel li { margin: 2px 0; }
+
+/* ============ EMPTY STATE ============ */
+.empty-state {
+  text-align: center; max-width: 640px; margin: 56px auto;
+  padding: 38px 30px; background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.empty-state .eyebrow {
+  display: inline-block; padding: 4px 11px; border-radius: var(--pill);
+  background: var(--brand-soft); color: var(--brand-solid); font-weight: 700; font-size: 12px;
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.empty-state h2 { margin: 16px 0 10px; font-size: 23px; letter-spacing: -.02em; }
+.empty-state p { color: var(--muted); margin: 0 auto 20px; max-width: 500px; }
+.empty-actions { display: flex; gap: 10px; justify-content: center; margin-bottom: 6px; }
+.empty-schema { font-size: 12px; color: var(--faint); margin-top: 22px; max-width: 560px; }
+.empty-schema code { font-size: 11.5px; }
+
+/* ============ section scaffolding ============ */
+.dashboard { animation: fade .25s ease; }
+@keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+.section-head { margin: 30px 0 14px; }
+.section-head h2 { font-size: 16px; font-weight: 700; letter-spacing: -.01em; }
+.section-head .cap { font-size: 13px; color: var(--muted); margin-top: 4px; max-width: 800px; }
+
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.card-pad { padding: 22px 24px 20px; }
+.card-head h3 { font-size: 15.5px; margin: 0; font-weight: 700; letter-spacing: -.01em; }
+.card-head .hint { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+.card-caption {
+  font-size: 12.5px; color: var(--muted);
+  margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border);
+}
+.card-caption b { color: var(--ink); font-weight: 700; }
+
+/* ============ 2 · SUMMARY BAND ============ */
+.summary-band {
+  margin-top: 24px; padding: 22px 26px;
+  display: flex; align-items: center; gap: 26px; flex-wrap: wrap;
+}
+.summary-headline {
+  font-size: 19px; font-weight: 700; letter-spacing: -.015em;
+  line-height: 1.3; flex: 0 0 auto; max-width: 320px;
+}
+.summary-headline .accent { color: var(--exp); }
+.kpi-chips { display: flex; gap: 12px; flex-wrap: wrap; flex: 1 1 auto; justify-content: flex-end; }
+.kpi-chip {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 11px 16px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--card); min-width: 108px;
+}
+.kpi-chip .k-label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--muted); font-weight: 600; display: flex; align-items: center; gap: 6px;
+}
+.kpi-chip .k-label .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 8px; }
+.kpi-chip .k-val { font-size: 21px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.dot.exp { background: var(--exp); }
+.dot.dead { background: var(--dead); }
+.dot.reo { background: var(--reo); }
+.dot.brand { background: var(--brand-solid); }
+.kpi-chip.frozen .k-val { color: var(--dead); }
+.kpi-chip.reorder .k-val { color: var(--reo); }
+
+/* ============ 3 · TWO-UP ROW (donut + cash bar) ============ */
+.row-2up { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: stretch; margin-top: 22px; }
+.row-2up .card { display: flex; flex-direction: column; }
+
+/* donut */
+.donut-wrap { display: flex; align-items: center; gap: 24px; margin-top: 8px; flex: 1; }
+.donut-svg { flex: 0 0 auto; }
+.donut-legend { flex: 1; display: flex; flex-direction: column; gap: 11px; min-width: 0; }
+.donut-legend .lrow { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.donut-legend .sw { width: 12px; height: 12px; border-radius: 3px; flex: 0 0 12px; }
+.donut-legend .name { font-weight: 600; color: var(--ink); }
+.donut-legend .cnt { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.donut-legend .divider { height: 1px; background: var(--border); margin: 2px 0; }
+
+/* chart svg shared helpers */
+.chart-svg { width: 100%; height: auto; display: block; }
+.axis-line { stroke: var(--border); stroke-width: 1; }
+.grid-line { stroke: var(--grid); stroke-width: 1; }
+.axis-text { fill: var(--muted); font-size: 10px; font-family: var(--font); }
+.axis-title-sm { fill: var(--muted); font-size: 10.5px; font-weight: 600; font-family: var(--font); }
+.bar-val { fill: var(--ink); font-size: 9.5px; font-weight: 600; font-family: var(--font); }
+.bar-label { fill: var(--muted); font-size: 9.5px; font-family: var(--font); }
+.cash-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+.legend-inline { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; font-size: 11.5px; color: var(--muted); }
+.legend-inline .li { display: flex; align-items: center; gap: 7px; }
+.legend-inline .sw { width: 11px; height: 11px; border-radius: 3px; flex: 0 0 11px; }
+
+/* ============ 4 · RUNWAY ============ */
+.runway-legend {
+  display: flex; gap: 22px; flex-wrap: wrap; margin: 14px 0 8px; padding: 12px 16px;
+  background: var(--brand-soft); border: 1px solid #e9e4f6; border-radius: 10px;
+}
+.runway-legend .item { display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: #334155; }
+.lg-bar { width: 26px; height: 13px; border-radius: 3px; background: linear-gradient(90deg, #ef6b6b, #dc2626); border: 1px solid #dc2626; }
+.lg-marker { position: relative; width: 14px; height: 16px; }
+.lg-marker::before { content: ""; position: absolute; left: 6px; top: 0; width: 2px; height: 16px; background: var(--ink); }
+.lg-marker::after { content: ""; position: absolute; left: 2px; top: 0; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--ink); }
+.lg-gap { width: 26px; height: 13px; border-radius: 3px; background: repeating-linear-gradient(45deg, var(--exp-bg), var(--exp-bg) 4px, #fbd0d0 4px, #fbd0d0 8px); border: 1px solid #f3b4b4; }
+
+svg.runway { display: block; width: 100%; height: auto; font-family: inherit; }
+.r-axis-label { fill: var(--muted); font-size: 11px; }
+.r-axis-title { fill: var(--ink); font-size: 11.5px; font-weight: 600; }
+.r-grid { stroke: var(--border); stroke-width: 1; }
+.r-grid.major { stroke: #dbe2ec; }
+.track-sku { fill: var(--ink); font-size: 12.5px; font-weight: 600; }
+.track-name { fill: var(--muted); font-size: 11px; }
+.track-base { fill: var(--grid); }
+.bar { transition: opacity .15s ease; }
+.cover-end-label { font-size: 10.5px; font-weight: 600; }
+.marker-line { stroke: var(--ink); stroke-width: 1.6; }
+.marker-label { fill: var(--ink); font-size: 10px; font-weight: 600; }
+.short-label { fill: var(--exp); font-size: 10.5px; font-weight: 700; }
+.track-group { transition: opacity .15s ease; }
+.track-group:hover .track-base { fill: var(--border); }
+
+.view-all-note { margin-top: 14px; font-size: 12.5px; color: var(--muted); }
+.view-all-note b { color: var(--ink); font-weight: 700; }
+
+.info-caption {
+  margin-top: 16px; display: flex; gap: 10px; align-items: flex-start;
+  font-size: 12.5px; color: var(--muted); padding: 12px 14px;
+  background: var(--page); border: 1px solid var(--border); border-radius: 10px;
+}
+.info-caption .ico {
+  flex: 0 0 18px; width: 18px; height: 18px; margin-top: 1px; border-radius: 5px;
+  background: var(--brand-soft); color: var(--brand-solid);
+  display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
+}
+
+/* ============ 5 · BUBBLE ============ */
+.bubble-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 6px; }
+.bubble-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; justify-content: flex-end; max-width: 420px; }
+.bubble-legend .item { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ink); font-weight: 600; }
+.bubble-legend .swatch { width: 12px; height: 12px; border-radius: 50%; flex: none; border: 1px solid rgba(15, 23, 42, .12); }
+.bubble-legend .size-key { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); font-weight: 500; }
+.bubble-legend .size-key .circ { display: inline-flex; align-items: flex-end; gap: 4px; }
+.bubble-legend .size-key .circ span { display: inline-block; border-radius: 50%; background: #cbd5e1; border: 1px solid #94a3b8; }
+
+svg.bubble-chart { width: 100%; height: auto; display: block; margin-top: 10px; }
+.axis-title { font-size: 13px; font-weight: 700; fill: var(--ink); }
+.axis-label { font-size: 11px; fill: var(--muted); }
+.b-grid { stroke: var(--grid); stroke-width: 1; }
+.quad-line { stroke: var(--faint); stroke-width: 1; stroke-dasharray: 4 4; }
+.corner-label { font-size: 11px; font-weight: 700; }
+.bubble-id { font-size: 9.5px; font-weight: 700; fill: #fff; pointer-events: none; }
+.dead-val { font-size: 9px; font-weight: 600; fill: var(--dead); }
+.band-label { font-size: 11px; font-weight: 700; fill: var(--dead); }
+.bubble { cursor: pointer; transition: opacity .12s ease; }
+.bubble circle { transition: stroke-width .12s ease; }
+.bubble:hover circle { stroke-width: 2.5; }
+.bubble.dim { opacity: .28; }
+
+#tooltip {
+  position: fixed; pointer-events: none; z-index: 50;
+  background: #0f172a; color: #fff; border-radius: 10px;
+  padding: 10px 12px; font-size: 12px; line-height: 1.5;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, .28);
+  opacity: 0; transform: translateY(4px); transition: opacity .1s ease, transform .1s ease;
+  max-width: 240px;
+}
+#tooltip.show { opacity: 1; transform: translateY(0); }
+#tooltip .tt-name { font-weight: 700; margin-bottom: 4px; font-size: 12.5px; }
+#tooltip .tt-row { display: flex; justify-content: space-between; gap: 18px; color: #cbd5e1; }
+#tooltip .tt-row b { color: #fff; font-weight: 600; }
+#tooltip .tt-tag {
+  display: inline-block; margin-top: 6px; font-size: 10px; font-weight: 700;
+  padding: 2px 7px; border-radius: 999px; text-transform: uppercase; letter-spacing: .03em;
+}
+
+/* ============ 6 · RANKED TOP-10 TABLE ============ */
+table.ranked { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table.ranked thead th {
+  text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--muted); font-weight: 700; padding: 14px 18px;
+  border-bottom: 1px solid var(--border); background: var(--page); white-space: nowrap;
+}
+table.ranked thead th.num { text-align: right; }
+table.ranked tbody td { padding: 13px 18px; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+table.ranked tbody tr:nth-child(even) { background: var(--page); }
+table.ranked tbody tr:hover { background: var(--brand-soft); }
+table.ranked tbody tr:last-child td { border-bottom: none; }
+.rank { color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; width: 26px; text-align: right; padding-right: 4px; }
+.sku-cell .sku { font-weight: 600; letter-spacing: -.01em; }
+.sku-cell .pname { color: var(--muted); font-size: 12px; margin-top: 1px; }
+.cover-cell { min-width: 200px; }
+.minibar { display: flex; align-items: center; gap: 10px; }
+.track { position: relative; flex: 1 1 auto; height: 8px; background: var(--grid); border-radius: 999px; overflow: hidden; max-width: 150px; }
+.fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; }
+.cover-val { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 64px; font-size: 12.5px; }
+.cover-val .unit { color: var(--muted); font-weight: 500; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700;
+  padding: 4px 10px; border-radius: 999px; letter-spacing: .02em; white-space: nowrap;
+}
+.chip .cdot { width: 7px; height: 7px; border-radius: 50%; }
+.chip.exp { background: var(--exp-bg); color: var(--exp); }
+.chip.exp .cdot { background: var(--exp); }
+.chip.reorder { background: var(--reo-bg); color: var(--reo); }
+.chip.reorder .cdot { background: var(--reo); }
+.chip.hold { background: var(--hold-bg); color: var(--hold); }
+.chip.hold .cdot { background: var(--hold); }
+.chip.dead { background: var(--dead-bg); color: var(--dead); }
+.chip.dead .cdot { background: var(--dead); }
+.chip.review { background: var(--review-bg); color: var(--review); }
+.chip.review .cdot { background: var(--review); }
+td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.action-amt .amt { font-weight: 700; }
+.action-amt .lbl { font-size: 11.5px; color: var(--muted); }
+.amt.reorder { color: var(--reo); }
+.amt.frozen { color: var(--dead); }
+.dim-dash { color: var(--muted); }
+
+/* ============ 7 · GATE (email-gated full report) ============ */
+.gate {
+  margin-top: 18px; padding: 20px 24px;
+  display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  background: linear-gradient(135deg, #f7f5fc 0%, #f1eefa 100%);
+  border: 1px solid var(--brand-line);
+}
+.gate-copy { flex: 1 1 320px; min-width: 0; }
+.gate-copy h3 { font-size: 15.5px; font-weight: 700; letter-spacing: -.01em; }
+.gate-copy p { font-size: 13px; color: var(--muted); margin: 4px 0 0; }
+.gate-copy p b { color: var(--ink); font-weight: 700; }
+.gate-action { flex: 0 0 auto; }
+
+.gate-form {
+  display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start;
+  margin-top: 14px; width: 100%;
+}
+.gate-form .field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 240px; min-width: 0; }
+.gate-input {
+  border: 1px solid var(--border); border-radius: 10px; padding: 10px 13px;
+  background: var(--card); width: 100%;
+}
+.gate-input:focus { outline: none; border-color: var(--brand-b); box-shadow: 0 0 0 3px rgba(120, 110, 190, .22); }
+.gate-input.invalid { border-color: var(--exp); box-shadow: 0 0 0 3px rgba(220, 38, 38, .14); }
+.gate-error { font-size: 11.5px; color: var(--exp); min-height: 14px; }
+.gate-success {
+  margin-top: 14px; width: 100%; padding: 14px 16px;
+  background: var(--hold-bg); border: 1px solid #bfe6cd; border-radius: 10px;
+  color: #0f5132; font-size: 13px; display: flex; align-items: center; gap: 10px;
+}
+.gate-success .ok-ico {
+  flex: 0 0 22px; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--hold); color: #fff; display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 13px;
+}
+.gate-success a {
+  color: var(--brand-solid); font-weight: 700; text-decoration: none;
+  margin-left: auto; white-space: nowrap;
+}
+.gate-success a:hover { text-decoration: underline; }
+.gate-fineprint { font-size: 11px; color: var(--faint); margin-top: 8px; width: 100%; }
+
+/* ============ 8 · FOOTER ============ */
+.foot {
+  font-size: 12px; color: var(--muted); text-align: center;
+  margin-top: 32px; line-height: 1.7;
+}
+.foot b { color: var(--ink); font-weight: 600; }
+
+/* ============ responsive ============ */
+@media (max-width: 820px) {
+  .wrap { padding: 0 18px 56px; }
+  .topbar-inner { padding: 14px 18px; }
+  .row-2up { grid-template-columns: 1fr; }
+  .summary-band { flex-direction: column; align-items: flex-start; gap: 18px; }
+  .summary-headline { max-width: none; }
+  .kpi-chips { justify-content: flex-start; }
+  .bubble-head { flex-direction: column; }
+  .bubble-legend { justify-content: flex-start; max-width: none; }
+  .donut-wrap { flex-direction: column; align-items: flex-start; }
+  .gate { flex-direction: column; align-items: flex-start; }
+}
+@media (max-width: 560px) {
+  .titles h1 { font-size: 15px; }
+  .btn-ghost span, .btn-primary span { font-size: 13px; }
+  table.ranked thead th, table.ranked tbody td { padding: 11px 12px; }
+  .cover-cell { min-width: 150px; }
+  .kpi-chip { flex: 1 1 calc(50% - 6px); min-width: 0; }
+}
+
+</style>
+  </head>
+  <body>
+    <!-- ============ 1 · HEADER ============ -->
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="logo" aria-hidden="true">D</div>
+        <div class="titles">
+          <h1>Inventory Stockout Risk Checker</h1>
+          <span class="sub" data-header-sub>Weekly stockout &amp; deadstock review</span>
+        </div>
+        <div class="topbar-actions">
+          <button class="btn-icon" type="button" data-theme-toggle aria-label="Toggle light or dark theme" title="Toggle theme"></button>
+          <button class="btn-ghost" type="button" data-sample-button>Try sample</button>
+          <label class="btn-primary">
+            <span>Upload CSV</span>
+            <input class="visually-hidden" type="file" accept=".csv,text/csv" data-file-input>
+          </label>
+        </div>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <!-- validation errors -->
+      <section class="error-panel" data-error-panel hidden aria-live="polite"></section>
+
+      <!-- ============ EMPTY STATE ============ -->
+      <section class="empty-state" data-empty-state>
+        <span class="eyebrow">Browser-local CSV analyzer</span>
+        <h2>See what to reorder, expedite, hold, or mark down — this week.</h2>
+        <p>Upload a normalized inventory CSV and get a chart-led weekly action review: stockout runway, deadstock cash, reorder spend, and the top SKUs to act on. Nothing leaves your browser.</p>
+        <div class="empty-actions">
+          <button class="btn-primary" type="button" data-sample-button>Try sample CSV</button>
+          <label class="btn-ghost">
+            <span>Upload CSV</span>
+            <input class="visually-hidden" type="file" accept=".csv,text/csv" data-file-input>
+          </label>
+        </div>
+        <p class="empty-schema">Required columns: <code>sku</code>, <code>product_name</code>, <code>inventory_on_hand</code>, <code>units_sold_30d</code>, <code>units_sold_90d</code>, <code>lead_time_days</code>. Optional: <code>unit_cost</code>, <code>vendor</code>, <code>category</code>, <code>reorder_multiple</code>, <code>incoming_units</code>, <code>committed_units</code>.</p>
+      </section>
+
+      <!-- ============ DASHBOARD (built by JS from state.rows) ============ -->
+      <div class="dashboard" data-dashboard hidden></div>
+    </main>
+
+    <!-- shared tooltip for the bubble chart -->
+    <div id="tooltip" role="status" aria-live="polite"></div>
+
+    <script>
+(function attach(root) {
+  "use strict";
+
+  var SAMPLE_CSV = [
+    "sku,product_name,inventory_on_hand,units_sold_30d,units_sold_90d,lead_time_days,unit_cost,vendor,category,reorder_multiple,incoming_units,committed_units",
+    "SKU-1001,Bamboo Storage Bin - Small,42,90,260,28,8.50,Northstar Home,Storage,12,0,10",
+    "SKU-1002,Bamboo Storage Bin - Large,18,72,210,35,12.25,Northstar Home,Storage,12,24,0",
+    "SKU-1003,Silicone Travel Bottle Set,240,12,35,21,3.10,Blue Ridge Goods,Travel,24,0,5",
+    "SKU-1004,Cotton Drawer Organizer,6,48,150,30,4.75,Northstar Home,Storage,12,0,4",
+    "SKU-1005,Reusable Produce Bag Set,310,0,0,45,2.20,Greenline Supply,Kitchen,50,0,0",
+    "SKU-1006,Magnetic Spice Labels,88,30,95,14,1.40,LabelWorks,Kitchen,20,0,0",
+    "SKU-1007,Glass Meal Prep Container 3pk,12,6,22,60,10.80,Blue Ridge Goods,Kitchen,6,0,8",
+    "SKU-1008,Linen Closet Divider,0,25,70,28,5.90,Northstar Home,Storage,10,40,0",
+    "SKU-1009,Compostable Shipping Mailer 50pk,500,150,420,20,6.30,PackRight,Shipping,25,0,25",
+    "SKU-1010,Holiday Gift Wrap Bundle,120,0,6,50,7.25,Seasonal House,Seasonal,12,0,0"
+  ].join("\n");
+
+  var REQUIRED_FIELDS = ["sku", "product_name", "inventory_on_hand", "units_sold_30d", "units_sold_90d", "lead_time_days"];
+  var OPTIONAL_FIELDS = ["unit_cost", "vendor", "category", "reorder_multiple", "incoming_units", "committed_units"];
+  var NUMERIC_FIELDS = [
+    "inventory_on_hand",
+    "units_sold_30d",
+    "units_sold_90d",
+    "lead_time_days",
+    "unit_cost",
+    "reorder_multiple",
+    "incoming_units",
+    "committed_units"
+  ];
+  var OPTIONAL_COPY = {
+    unit_cost: ["Cash tied up and estimated cash for reorder enabled", "Cash tied up and reorder cash unavailable"],
+    vendor: ["Supplier draft personalized", "Supplier draft uses a generic greeting"],
+    category: ["Category available for segmentation", "Category not available for segmentation"],
+    reorder_multiple: ["Reorder qty rounded to MOQ or pack multiple", "Reorder qty not rounded to MOQ"],
+    incoming_units: ["Inbound counted in effective inventory", "Inbound not counted"],
+    committed_units: ["Committed units subtracted from available inventory", "Committed units default to 0"]
+  };
+
+  var state = {
+    rows: [],
+    headers: [],
+    dataQuality: null,
+    summary: null,
+    selectedSku: null,
+    templateOverride: null,
+    activeTab: "overview",
+    stockoutSort: { key: "urgency", direction: "asc" },
+    status: "empty"
+  };
+
+  // Anonymous behavioral counter - no network, no cookie, no third-party.
+  // Default: no-op. A future PR (Esther-approved) can swap in a cookieless destination.
+  function track(event, props) {
+    var safeProps = props || {};
+    if (root.__DEBUG_TRACK && root.console && typeof root.console.debug === "function") {
+      root.console.debug("[track]", event, safeProps);
+    }
+  }
+
+  function escapeHtml(value) {
+    return String(value === null || value === undefined ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function parseCsv(text) {
+    var rows = [];
+    var current = "";
+    var row = [];
+    var inQuotes = false;
+    var i;
+    var char;
+    var next;
+
+    for (i = 0; i < text.length; i += 1) {
+      char = text[i];
+      next = text[i + 1];
+      if (char === '"' && inQuotes && next === '"') {
+        current += '"';
+        i += 1;
+      } else if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === "," && !inQuotes) {
+        row.push(current);
+        current = "";
+      } else if ((char === "\n" || char === "\r") && !inQuotes) {
+        if (char === "\r" && next === "\n") i += 1;
+        row.push(current);
+        if (row.some(function hasValue(cell) { return String(cell).trim() !== ""; })) rows.push(row);
+        row = [];
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+
+    row.push(current);
+    if (row.some(function hasValue(cell) { return String(cell).trim() !== ""; })) rows.push(row);
+    if (!rows.length) return { headers: [], rows: [] };
+
+    var headers = rows[0].map(function header(cell) { return String(cell).trim(); });
+    return {
+      headers: headers,
+      rows: rows.slice(1).map(function mapRow(cells) {
+        var item = {};
+        headers.forEach(function eachHeader(header, index) {
+          item[header] = cells[index] === undefined ? "" : String(cells[index]).trim();
+        });
+        return item;
+      })
+    };
+  }
+
+  function toNumber(value) {
+    if (value === null || value === undefined || value === "") return null;
+    var cleaned = String(value).replace(/[$,]/g, "").trim();
+    if (cleaned === "") return null;
+    var parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : NaN;
+  }
+
+  function validateHeaders(headers) {
+    var normalized = headers.map(function lower(header) { return header.toLowerCase(); });
+    var missing = REQUIRED_FIELDS.filter(function missingField(field) {
+      return normalized.indexOf(field) === -1;
+    });
+    return missing.map(function message(field) {
+      return "Missing required column: " + field;
+    });
+  }
+
+  function normalizeRow(row, index) {
+    var normalized = {
+      rowIndex: index + 2,
+      sku: String(row.sku || "").trim(),
+      product_name: String(row.product_name || "").trim(),
+      vendor: String(row.vendor || "").trim(),
+      category: String(row.category || "").trim(),
+      source: row
+    };
+
+    NUMERIC_FIELDS.forEach(function assign(field) {
+      var value = toNumber(row[field]);
+      if (value === null && (field === "incoming_units" || field === "committed_units")) value = 0;
+      normalized[field] = value;
+    });
+
+    return normalized;
+  }
+
+  function validateRows(rawRows) {
+    var errors = [];
+    var normalizedRows = rawRows.map(normalizeRow);
+    var seenSkus = {};
+
+    normalizedRows.forEach(function validate(row) {
+      if (!row.sku) errors.push("Blank sku in row " + row.rowIndex);
+      if (!row.product_name) errors.push("Blank product_name for SKU " + (row.sku || "row " + row.rowIndex));
+      if (row.sku) {
+        if (seenSkus[row.sku]) errors.push("Duplicate SKU found: " + row.sku);
+        seenSkus[row.sku] = true;
+      }
+
+      REQUIRED_FIELDS.forEach(function checkRequired(field) {
+        if (field === "sku" || field === "product_name") return;
+        if (row[field] === null || Number.isNaN(row[field])) {
+          errors.push("Invalid number in " + field + " for SKU " + (row.sku || "row " + row.rowIndex));
+        }
+      });
+
+      OPTIONAL_FIELDS.forEach(function checkOptional(field) {
+        if (field === "vendor" || field === "category") return;
+        if (row.source[field] !== undefined && String(row.source[field]).trim() !== "" && Number.isNaN(row[field])) {
+          errors.push("Invalid number in " + field + " for SKU " + (row.sku || "row " + row.rowIndex));
+        }
+      });
+
+      if (row.inventory_on_hand < 0) errors.push("Negative inventory is not supported in v0: " + row.sku);
+      if (row.units_sold_30d < 0) errors.push("Negative units_sold_30d is not supported in v0: " + row.sku);
+      if (row.units_sold_90d < 0) errors.push("Negative units_sold_90d is not supported in v0: " + row.sku);
+      if (row.incoming_units < 0) errors.push("Negative incoming_units is not supported in v0: " + row.sku);
+      if (row.committed_units < 0) errors.push("Negative committed_units is not supported in v0: " + row.sku);
+      if (row.lead_time_days < 0 || row.lead_time_days > 365) errors.push("lead_time_days must be between 0 and 365 for SKU " + row.sku);
+      if (row.unit_cost !== null && row.unit_cost < 0) errors.push("unit_cost cannot be negative for SKU " + row.sku);
+      if (row.reorder_multiple !== null && row.reorder_multiple <= 0) errors.push("reorder_multiple must be greater than 0 for SKU " + row.sku);
+    });
+
+    if (!rawRows.length) errors.push("CSV must contain at least 1 analyzable row");
+    return { errors: errors, rows: errors.length ? [] : normalizedRows };
+  }
+
+  function round(value, decimals) {
+    var factor = Math.pow(10, decimals || 0);
+    return Math.round((value + Number.EPSILON) * factor) / factor;
+  }
+
+  function roundUpToMultiple(value, multiple) {
+    if (!(multiple > 0)) return Math.ceil(value);
+    return Math.ceil(value / multiple) * multiple;
+  }
+
+  function computeSafetyBufferDays(leadTimeDays) {
+    return Math.max(7, Math.ceil(0.25 * leadTimeDays));
+  }
+
+  function calculateInventoryMetrics(row) {
+    var averageDailySales30d = row.units_sold_30d / 30;
+    var averageDailySales90d = row.units_sold_90d / 90;
+    var dailyVelocity = Math.max(averageDailySales30d, averageDailySales90d);
+    var committed = row.committed_units || 0;
+    var incoming = row.incoming_units || 0;
+    var availableInventory = Math.max(0, row.inventory_on_hand - committed);
+    var effectiveInventory = availableInventory + incoming;
+    var daysOfCover = dailyVelocity > 0 ? effectiveInventory / dailyVelocity : Infinity;
+    var safetyBufferDays = computeSafetyBufferDays(row.lead_time_days);
+    var highThreshold = row.lead_time_days + safetyBufferDays;
+    var mediumThreshold = highThreshold + 14;
+    var stockoutRisk = "low";
+    var urgency = "HOLD";
+    var targetCoverDays = row.lead_time_days + 30;
+    var rawReorderQuantity = dailyVelocity > 0 ? Math.max(0, targetCoverDays * dailyVelocity - effectiveInventory) : 0;
+    var reorderQuantity = roundUpToMultiple(rawReorderQuantity, row.reorder_multiple);
+    var hasCost = row.unit_cost !== null && !Number.isNaN(row.unit_cost);
+    var cashTiedUp = hasCost ? row.inventory_on_hand * row.unit_cost : null;
+    var estimatedCashForReorder = hasCost ? reorderQuantity * row.unit_cost : null;
+    var projectedDaysShort = dailyVelocity > 0 ? Math.max(0, row.lead_time_days - daysOfCover) : 0;
+    var deadstockCandidate = row.inventory_on_hand > 0 && (daysOfCover > 180 || (dailyVelocity <= 0 && row.units_sold_30d === 0));
+    var deadstockRisk = "low";
+
+    if (dailyVelocity > 0 && daysOfCover <= highThreshold) stockoutRisk = "high";
+    else if (dailyVelocity > 0 && daysOfCover <= mediumThreshold) stockoutRisk = "medium";
+
+    if (dailyVelocity > 0 && daysOfCover < row.lead_time_days) urgency = "EXPEDITE";
+    else if (dailyVelocity > 0 && daysOfCover < row.lead_time_days + safetyBufferDays) urgency = "REORDER";
+
+    if (deadstockCandidate) {
+      deadstockRisk = row.units_sold_30d === 0 || row.units_sold_90d === 0 ? "high" : "medium";
+    }
+
+    return {
+      averageDailySales30d: averageDailySales30d,
+      averageDailySales90d: averageDailySales90d,
+      dailyVelocity: dailyVelocity,
+      availableInventory: availableInventory,
+      effectiveInventory: effectiveInventory,
+      daysOfCover: daysOfCover,
+      safetyBufferDays: safetyBufferDays,
+      stockoutRisk: stockoutRisk,
+      urgency: urgency,
+      reorderQuantity: reorderQuantity,
+      rawReorderQuantity: rawReorderQuantity,
+      cashTiedUp: cashTiedUp,
+      estimatedCashForReorder: estimatedCashForReorder,
+      projectedDaysShort: projectedDaysShort,
+      deadstockCandidate: deadstockCandidate,
+      deadstockRisk: deadstockRisk
+    };
+  }
+
+  function evaluateCaveats(row, metrics) {
+    return {
+      newlyActiveSku: row.units_sold_30d > 0 && row.units_sold_90d < row.units_sold_30d * 2.5,
+      offSeasonCandidate: metrics.deadstockCandidate,
+      committedExceedsOnHand: row.committed_units > row.inventory_on_hand
+    };
+  }
+
+  function determineAction(rowWithMetrics) {
+    var metrics = rowWithMetrics.metrics;
+    if (rowWithMetrics.validationIssue) return "review";
+    if (metrics.deadstockCandidate) return "markdown";
+    if (metrics.stockoutRisk === "high" && metrics.daysOfCover < rowWithMetrics.lead_time_days && metrics.reorderQuantity > 0) return "expedite";
+    if (metrics.stockoutRisk === "high" && metrics.reorderQuantity > 0) return "reorder";
+    return "hold";
+  }
+
+  function enrichRows(rows) {
+    return rows.map(function enrich(row) {
+      var metrics = calculateInventoryMetrics(row);
+      var caveats = evaluateCaveats(row, metrics);
+      var enriched = Object.assign({}, row, { metrics: metrics, caveats: caveats });
+      enriched.action = determineAction(enriched);
+      enriched.defaultTemplate = selectSupplierTemplate(enriched);
+      return enriched;
+    });
+  }
+
+  function selectSupplierTemplate(row) {
+    return row.action === "expedite" ? "urgent_expedite" : "standard_reorder";
+  }
+
+  function analyticsTemplateName(templateKey) {
+    return templateKey === "urgent_expedite" ? "urgent" : "standard";
+  }
+
+  function fmtNumber(value, decimals) {
+    if (value === null || value === undefined || Number.isNaN(value)) return "-";
+    if (!Number.isFinite(value)) return "No recent sales";
+    return Number(value).toLocaleString("en-US", {
+      minimumFractionDigits: decimals || 0,
+      maximumFractionDigits: decimals || 0
+    });
+  }
+
+  function fmtDays(value) {
+    if (!Number.isFinite(value)) return "No recent sales";
+    if (value < 10) return fmtNumber(value, 1);
+    return fmtNumber(value, 0);
+  }
+
+  function fmtMoney(value) {
+    if (value === null || value === undefined || Number.isNaN(value)) return "-";
+    return "$" + Number(value).toLocaleString("en-US", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    });
+  }
+
+  function actionLabel(row) {
+    if (row.action === "expedite") return "EXPEDITE - projected " + fmtNumber(Math.ceil(row.metrics.projectedDaysShort), 0) + " days short";
+    if (row.action === "reorder") return "REORDER";
+    if (row.action === "markdown") return "DEADSTOCK CANDIDATE";
+    if (row.action === "review") return "REVIEW DATA";
+    return "HOLD";
+  }
+
+  function actionClass(row) {
+    if (row.action === "markdown") return "deadstock";
+    return row.action;
+  }
+
+  function buildSupplierDraft(row, templateKey) {
+    var vendor = row.vendor || "Supplier team";
+    var requestedBy = new Date();
+    requestedBy.setDate(requestedBy.getDate() + Math.ceil(row.lead_time_days));
+    var dateText = requestedBy.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    var lastCost = row.metrics.estimatedCashForReorder === null ? "-" : "$" + row.unit_cost.toFixed(2);
+    var standard = [
+      "Subject: Reorder request for " + row.sku + " - " + row.product_name,
+      "",
+      "Hi " + vendor + ",",
+      "",
+      "Can you confirm availability for a reorder of " + fmtNumber(row.metrics.reorderQuantity, 0) + " units of " + row.product_name + " (" + row.sku + ")?",
+      "",
+      "Current planning details:",
+      "- On hand: " + fmtNumber(row.inventory_on_hand, 0) + " units",
+      "- Incoming units already expected: " + fmtNumber(row.incoming_units || 0, 0),
+      "- Current days of cover: " + fmtDays(row.metrics.daysOfCover),
+      "- Standard lead time: " + fmtNumber(row.lead_time_days, 0) + " days",
+      "- Requested by: " + dateText,
+      "- Last unit cost: " + lastCost,
+      "",
+      "Please confirm:",
+      "1. Availability and updated lead time",
+      "2. Current pricing and MOQ or pack multiple",
+      "3. Earliest ship date"
+    ].join("\n");
+    var urgent = [
+      "Subject: Urgent expedite request for " + row.sku + " - " + row.product_name,
+      "",
+      "Hi " + vendor + ",",
+      "",
+      "This SKU may run short before the normal replenishment window. Can you confirm the fastest option for " + fmtNumber(row.metrics.reorderQuantity, 0) + " units of " + row.product_name + " (" + row.sku + ")?",
+      "",
+      "Current planning details:",
+      "- On hand: " + fmtNumber(row.inventory_on_hand, 0) + " units",
+      "- Days of cover: " + fmtDays(row.metrics.daysOfCover),
+      "- Standard lead time: " + fmtNumber(row.lead_time_days, 0) + " days",
+      "- Projected days short: " + fmtNumber(Math.ceil(row.metrics.projectedDaysShort), 0),
+      "- Requested reorder quantity: " + fmtNumber(row.metrics.reorderQuantity, 0) + " units",
+      "",
+      "Please confirm:",
+      "1. Fastest possible ship date",
+      "2. Expedite or air-freight cost option",
+      "3. Whether a partial early shipment is available"
+    ].join("\n");
+
+    return templateKey === "urgent_expedite" ? urgent : standard;
+  }
+
+  function summarizeDataQuality(headers, rows, errors) {
+    var normalizedHeaders = headers.map(function lower(header) { return header.toLowerCase(); });
+    var optional = OPTIONAL_FIELDS.map(function item(field) {
+      var present = normalizedHeaders.indexOf(field) !== -1;
+      return {
+        field: field,
+        present: present,
+        consequence: present ? OPTIONAL_COPY[field][0] : OPTIONAL_COPY[field][1]
+      };
+    });
+    var warningCounts = {
+      newlyActiveSku: rows.filter(function count(row) { return row.caveats.newlyActiveSku; }).length,
+      committedExceedsOnHand: rows.filter(function count(row) { return row.caveats.committedExceedsOnHand; }).length,
+      reviewData: errors ? errors.length : 0
+    };
+    return {
+      optional: optional,
+      optionalUsedCount: optional.filter(function used(item) { return item.present; }).length,
+      warnings: warningCounts
+    };
+  }
+
+  function summarizePortfolio(rows) {
+    var actionCounts = rows.reduce(function count(map, row) {
+      map[row.action] = (map[row.action] || 0) + 1;
+      return map;
+    }, {});
+    var stockoutHigh = rows.filter(function count(row) { return row.metrics.stockoutRisk === "high"; }).length;
+    var deadstock = rows.filter(function count(row) { return row.metrics.deadstockCandidate; }).length;
+    var totalCashTiedUp = rows.reduce(function sum(total, row) {
+      return total + (row.metrics.deadstockCandidate && row.metrics.cashTiedUp ? row.metrics.cashTiedUp : 0);
+    }, 0);
+    var reorderCash = rows.reduce(function sum(total, row) {
+      return total + (row.action === "expedite" || row.action === "reorder" ? (row.metrics.estimatedCashForReorder || 0) : 0);
+    }, 0);
+    return {
+      skuCount: rows.length,
+      stockoutHigh: stockoutHigh,
+      deadstock: deadstock,
+      totalCashTiedUp: totalCashTiedUp,
+      reorderCash: reorderCash,
+      actionCounts: actionCounts,
+      actionNeeded: rows.filter(function count(row) { return row.action !== "hold"; }).length
+    };
+  }
+
+  function analyzeCsv(text) {
+    var parsed = parseCsv(text);
+    var headerErrors = validateHeaders(parsed.headers);
+    if (headerErrors.length) return { ok: false, errors: headerErrors, headers: parsed.headers, rows: [] };
+    var validated = validateRows(parsed.rows);
+    if (validated.errors.length) return { ok: false, errors: validated.errors, headers: parsed.headers, rows: [] };
+    var rows = enrichRows(validated.rows);
+    return {
+      ok: true,
+      errors: [],
+      headers: parsed.headers,
+      rows: rows,
+      dataQuality: summarizeDataQuality(parsed.headers, rows, []),
+      summary: summarizePortfolio(rows)
+    };
+  }
+
+  function recalcRowForLeadTimeEdit(row, newLeadTimeDays) {
+    var next = Object.assign({}, row, { lead_time_days: newLeadTimeDays });
+    var metrics = calculateInventoryMetrics(next);
+    var caveats = evaluateCaveats(next, metrics);
+    next.metrics = metrics;
+    next.caveats = caveats;
+    next.action = determineAction(next);
+    next.defaultTemplate = selectSupplierTemplate(next);
+    return next;
+  }
+
+  /* ============================================================
+     RENDER LAYER — chart-led weekly dashboard.
+     Everything below is generated from state.rows / state.summary;
+     the calc engine above is never touched.
+     ============================================================ */
+
+  var COVER_CAP = 120;            // days-of-cover axis cap
+  var RUNWAY_LIMIT = 20;          // max at-risk tracks drawn
+  var CASH_BAR_LIMIT = 12;        // max bars in the cash chart
+  var EMAIL_KEY = "docktoai_report_email";
+
+  // ink/soft are CSS var() tokens so charts recolor live on theme switch.
+  // CSS var() works inside SVG style="" but NOT in fill="" attributes — every
+  // consumer below therefore emits style="fill:..." / style="stroke:...".
+  var ACTION_COLOR = {
+    expedite: { ink: "var(--exp)", soft: "var(--exp-bg)", chip: "exp", label: "Expedite" },
+    reorder: { ink: "var(--reo)", soft: "var(--reo-bg)", chip: "reorder", label: "Reorder" },
+    markdown: { ink: "var(--dead)", soft: "var(--dead-bg)", chip: "dead", label: "Deadstock" },
+    review: { ink: "var(--review)", soft: "var(--review-bg)", chip: "review", label: "Review" },
+    hold: { ink: "var(--hold)", soft: "var(--hold-bg)", chip: "hold", label: "Hold" }
+  };
+
+  function setHeaderSub(text) {
+    var el = document.querySelector("[data-header-sub]");
+    if (el) el.textContent = text;
+  }
+
+  function showEmptyState(show) {
+    var empty = document.querySelector("[data-empty-state]");
+    var dash = document.querySelector("[data-dashboard]");
+    if (empty) empty.hidden = !show;
+    if (dash) dash.hidden = show;
+  }
+
+  function clearDashboard() {
+    var dash = document.querySelector("[data-dashboard]");
+    if (dash) dash.innerHTML = "";
+  }
+
+  function showErrors(errors) {
+    var panel = document.querySelector("[data-error-panel]");
+    if (!panel) return;
+    if (!errors || !errors.length) {
+      panel.hidden = true;
+      panel.innerHTML = "";
+      return;
+    }
+    panel.hidden = false;
+    panel.innerHTML = [
+      "<h2>We couldn't analyze this CSV yet</h2>",
+      "<p>Fix the issues below, then upload again — or try the sample file.</p>",
+      "<ul>" + errors.map(function error(item) { return "<li>" + escapeHtml(item) + "</li>"; }).join("") + "</ul>"
+    ].join("");
+  }
+
+  // Priority-ordered rows (most urgent first) — reuses engine ordering.
+  function sortedActionRows() {
+    var priority = { expedite: 1, reorder: 2, markdown: 3, review: 4, hold: 5 };
+    return state.rows.slice().sort(function compare(a, b) {
+      var pa = priority[a.action] || 9;
+      var pb = priority[b.action] || 9;
+      if (pa !== pb) return pa - pb;
+      if (a.metrics.daysOfCover !== b.metrics.daysOfCover) return a.metrics.daysOfCover - b.metrics.daysOfCover;
+      return a.sku.localeCompare(b.sku);
+    });
+  }
+
+  function shortSku(sku) {
+    var s = String(sku || "");
+    var dash = s.lastIndexOf("-");
+    return dash >= 0 && dash < s.length - 1 ? s.slice(dash + 1) : s;
+  }
+
+  function urgencyRank(row) {
+    var order = { EXPEDITE: 0, REORDER: 1, HOLD: 2 };
+    var key = row.metrics.urgency in order ? order[row.metrics.urgency] : 3;
+    return key * 1000 + (Number.isFinite(row.metrics.daysOfCover) ? row.metrics.daysOfCover : 9999);
+  }
+
+  // ---- 2 · SUMMARY BAND ------------------------------------------------
+  function renderSummaryBand(s) {
+    var headline = s.actionNeeded
+      ? "<span class=\"accent\">" + fmtNumber(s.actionNeeded, 0) + " of " + fmtNumber(s.skuCount, 0) + " SKUs</span> need action this week"
+      : "All " + fmtNumber(s.skuCount, 0) + " SKUs are holding steady this week";
+    return [
+      "<div class=\"card summary-band\">",
+      "<div class=\"summary-headline\">" + headline + "</div>",
+      "<div class=\"kpi-chips\">",
+      kpiChip("exp", "Need action", fmtNumber(s.actionNeeded, 0), ""),
+      kpiChip("exp", "Stockout risk", fmtNumber(s.stockoutHigh, 0), ""),
+      kpiChip("dead", "Deadstock", fmtNumber(s.deadstock, 0), ""),
+      kpiChip("dead", "Cash frozen", fmtMoney(s.totalCashTiedUp), "frozen"),
+      kpiChip("reo", "To reorder", fmtMoney(s.reorderCash), "reorder"),
+      "</div>",
+      "</div>"
+    ].join("");
+  }
+
+  function kpiChip(dot, label, value, cls) {
+    return [
+      "<div class=\"kpi-chip " + cls + "\">",
+      "<span class=\"k-label\"><span class=\"dot " + dot + "\"></span>" + escapeHtml(label) + "</span>",
+      "<span class=\"k-val\">" + value + "</span>",
+      "</div>"
+    ].join("");
+  }
+
+  // ---- 3a · INVENTORY STATUS DONUT -------------------------------------
+  function renderDonut(rows, s) {
+    var order = ["expedite", "reorder", "markdown", "hold", "review"];
+    var counts = order.map(function each(action) {
+      return { action: action, n: rows.filter(function f(r) { return r.action === action; }).length };
+    }).filter(function nonZero(item) { return item.n > 0; });
+
+    var total = rows.length || 1;
+    var r = 58;
+    var circ = 2 * Math.PI * r;
+    var offset = 0;
+    var arcs = counts.map(function arc(item) {
+      var frac = item.n / total;
+      var len = frac * circ;
+      var seg = "<circle cx=\"80\" cy=\"80\" r=\"" + r + "\" fill=\"none\" style=\"stroke:" + ACTION_COLOR[item.action].ink +
+        "\" stroke-width=\"26\" stroke-dasharray=\"" + round(len, 2) + " " + round(circ - len, 2) +
+        "\" stroke-dashoffset=\"" + round(-offset, 2) + "\"></circle>";
+      offset += len;
+      return seg;
+    }).join("");
+
+    var legend = counts.map(function row(item) {
+      var pct = Math.round((item.n / total) * 100);
+      return "<div class=\"lrow\"><span class=\"sw\" style=\"background:" + ACTION_COLOR[item.action].ink + "\"></span>" +
+        "<span class=\"name\">" + ACTION_COLOR[item.action].label + "</span>" +
+        "<span class=\"cnt\">" + item.n + " · " + pct + "%</span></div>";
+    }).join("") +
+      "<div class=\"divider\"></div>" +
+      "<div class=\"lrow\"><span class=\"sw\" style=\"background:var(--border)\"></span>" +
+      "<span class=\"name\" style=\"color:var(--muted);font-weight:500;\">Total tracked</span>" +
+      "<span class=\"cnt\">" + fmtNumber(s.skuCount, 0) + " SKUs</span></div>";
+
+    var caption = s.actionNeeded
+      ? "<b>" + fmtNumber(s.actionNeeded, 0) + " of " + fmtNumber(s.skuCount, 0) + " SKUs need action this week</b> — " +
+        fmtNumber(s.stockoutHigh, 0) + " at risk of selling out, " + fmtNumber(s.deadstock, 0) + " sitting as deadstock."
+      : "Every SKU has healthy cover and steady velocity — nothing to expedite or mark down this week.";
+
+    return [
+      "<div class=\"card card-pad\">",
+      "<div class=\"card-head\"><h3>Inventory status</h3><div class=\"hint\">Share of the " + fmtNumber(s.skuCount, 0) + " SKUs by recommended action.</div></div>",
+      "<div class=\"donut-wrap\">",
+      "<svg class=\"donut-svg\" width=\"160\" height=\"160\" viewBox=\"0 0 160 160\" role=\"img\" aria-label=\"Inventory status donut by action\">",
+      "<g transform=\"rotate(-90 80 80)\">",
+      "<circle cx=\"80\" cy=\"80\" r=\"" + r + "\" fill=\"none\" style=\"stroke:var(--grid)\" stroke-width=\"26\"></circle>",
+      arcs,
+      "</g>",
+      "<text x=\"80\" y=\"74\" text-anchor=\"middle\" style=\"font-size:25px;font-weight:700;fill:var(--ink);font-family:var(--font);\">" + fmtNumber(s.skuCount, 0) + "</text>",
+      "<text x=\"80\" y=\"93\" text-anchor=\"middle\" style=\"font-size:11px;fill:var(--muted);font-family:var(--font);letter-spacing:.5px;\">SKUs</text>",
+      "</svg>",
+      "<div class=\"donut-legend\">" + legend + "</div>",
+      "</div>",
+      "<div class=\"card-caption\">" + caption + "</div>",
+      "</div>"
+    ].join("");
+  }
+
+  // ---- 3b · WHERE THE MONEY IS (vertical bar) --------------------------
+  function renderCashBar() {
+    // Reorder cash for action rows (expedite/reorder) + deadstock cash frozen.
+    var items = [];
+    state.rows.forEach(function each(row) {
+      if ((row.action === "expedite" || row.action === "reorder") && row.metrics.estimatedCashForReorder) {
+        items.push({ sku: row.sku, value: row.metrics.estimatedCashForReorder, color: ACTION_COLOR.expedite.ink, kind: "reorder" });
+      } else if (row.action === "markdown" && row.metrics.cashTiedUp) {
+        items.push({ sku: row.sku, value: row.metrics.cashTiedUp, color: ACTION_COLOR.markdown.ink, kind: "frozen" });
+      }
+    });
+    items.sort(function byVal(a, b) { return b.value - a.value; });
+    var hidden = Math.max(0, items.length - CASH_BAR_LIMIT);
+    var shown = items.slice(0, CASH_BAR_LIMIT);
+
+    var head = "<div class=\"card-head\"><h3>Where the money is</h3><div class=\"hint\">Reorder cash (action SKUs) vs. cash frozen in deadstock.</div></div>";
+    if (!shown.length) {
+      return [
+        "<div class=\"card card-pad\">",
+        head,
+        "<div class=\"info-caption\" style=\"margin-top:14px;\"><span class=\"ico\">i</span><span>No reorder spend or frozen cash to show — add a <b>unit_cost</b> column to see dollar amounts, or this catalog simply has no cash on the line this week.</span></div>",
+        "</div>"
+      ].join("");
+    }
+
+    var maxVal = shown.reduce(function m(acc, it) { return Math.max(acc, it.value); }, 0);
+    var axisMax = niceCeil(maxVal);
+
+    // viewBox geometry
+    var vbW = 480, vbH = 264;
+    var plotL = 54, plotR = 462, plotT = 18, plotB = 210;
+    var n = shown.length;
+    var slot = (plotR - plotL) / n;
+    var barW = Math.min(40, slot * 0.62);
+
+    var gridLines = [0, 0.25, 0.5, 0.75, 1].map(function g(frac) {
+      var y = plotB - frac * (plotB - plotT);
+      var val = axisMax * frac;
+      var cls = frac === 0 ? "axis-line" : "grid-line";
+      return "<line class=\"" + cls + "\" x1=\"" + plotL + "\" y1=\"" + round(y, 1) + "\" x2=\"" + plotR + "\" y2=\"" + round(y, 1) + "\"></line>" +
+        "<text class=\"axis-text\" x=\"" + (plotL - 5) + "\" y=\"" + round(y + 3, 1) + "\" text-anchor=\"end\">" + fmtMoney(val) + "</text>";
+    }).join("");
+
+    var bars = shown.map(function bar(it, i) {
+      var x = plotL + slot * i + (slot - barW) / 2;
+      var h = axisMax > 0 ? (it.value / axisMax) * (plotB - plotT) : 0;
+      var y = plotB - h;
+      return [
+        "<rect x=\"" + round(x, 1) + "\" y=\"" + round(y, 1) + "\" width=\"" + round(barW, 1) + "\" height=\"" + round(h, 1) + "\" rx=\"3\" style=\"fill:" + it.color + "\"></rect>",
+        "<text class=\"bar-val\" x=\"" + round(x + barW / 2, 1) + "\" y=\"" + round(y - 6, 1) + "\" text-anchor=\"middle\">" + fmtMoney(it.value) + "</text>",
+        "<text class=\"bar-label\" x=\"" + round(x + barW / 2, 1) + "\" y=\"" + (plotB + 14) + "\" text-anchor=\"middle\">" + escapeHtml(shortSku(it.sku)) + "</text>"
+      ].join("");
+    }).join("");
+
+    return [
+      "<div class=\"card card-pad\">",
+      head,
+      "<svg class=\"chart-svg\" viewBox=\"0 0 " + vbW + " " + vbH + "\" role=\"img\" aria-label=\"Vertical bar chart of reorder cash and cash frozen by SKU\" style=\"margin-top:6px;\">",
+      "<text class=\"axis-title-sm\" transform=\"translate(14," + ((plotT + plotB) / 2) + ") rotate(-90)\" text-anchor=\"middle\">Cash (USD)</text>",
+      gridLines,
+      "<line class=\"axis-line\" x1=\"" + plotL + "\" y1=\"" + plotT + "\" x2=\"" + plotL + "\" y2=\"" + plotB + "\"></line>",
+      bars,
+      "<text class=\"axis-title-sm\" x=\"" + ((plotL + plotR) / 2) + "\" y=\"" + (vbH - 6) + "\" text-anchor=\"middle\">SKU</text>",
+      "</svg>",
+      "<div class=\"legend-inline\">",
+      "<div class=\"li\"><span class=\"sw\" style=\"background:" + ACTION_COLOR.expedite.ink + "\"></span>Reorder cash (action SKUs)</div>",
+      "<div class=\"li\"><span class=\"sw\" style=\"background:" + ACTION_COLOR.markdown.ink + "\"></span>Cash frozen (deadstock)</div>",
+      "</div>",
+      (hidden ? "<div class=\"cash-note\">Showing the top " + CASH_BAR_LIMIT + " by dollar value · <b>+" + hidden + " more</b> with cash on the line.</div>" : ""),
+      "<div class=\"card-caption\">Tallest bars = where your cash is <b>going</b> (red, restock these) or <b>stuck</b> (violet, deadstock to clear).</div>",
+      "</div>"
+    ].join("");
+  }
+
+  function niceCeil(value) {
+    if (!(value > 0)) return 100;
+    var mag = Math.pow(10, Math.floor(Math.log10(value)));
+    var norm = value / mag;
+    var step = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10;
+    return step * mag;
+  }
+
+  // ---- 4 · STOCKOUT RUNWAY ---------------------------------------------
+  function renderRunway() {
+    // At-risk only: action !== hold AND finite cover. Sorted by urgency.
+    var atRisk = state.rows.filter(function f(row) {
+      return row.action !== "hold" && row.action !== "markdown" && Number.isFinite(row.metrics.daysOfCover);
+    }).sort(function s(a, b) { return urgencyRank(a) - urgencyRank(b); });
+
+    var totalAtRisk = atRisk.length;
+    var rows = atRisk.slice(0, RUNWAY_LIMIT);
+
+    var head = [
+      "<div class=\"section-head\">",
+      "<h2>Stockout runway</h2>",
+      "<div class=\"cap\">Will a reorder placed today arrive before you sell out? Each track is one product, most-exposed first.</div>",
+      "</div>"
+    ].join("");
+
+    if (!rows.length) {
+      return head + [
+        "<div class=\"card card-pad\">",
+        "<div class=\"info-caption\"><span class=\"ico\">✓</span><span>No SKUs are at stockout risk this week — every product has more days of cover than its lead time plus safety buffer.</span></div>",
+        "</div>"
+      ].join("");
+    }
+
+    // geometry
+    var labelW = 236;
+    var plotX0 = 236, plotX1 = 1024;
+    var plotW = plotX1 - plotX0;
+    var pxPerDay = plotW / COVER_CAP;
+    var rowH = 46, barTop0 = 33, barH = 22;
+    var axisTop = 34, axisBottomY = barTop0 + rows.length * rowH - 12;
+    var vbH = axisBottomY + 50;
+
+    function dayX(d) { return plotX0 + Math.min(COVER_CAP, Math.max(0, d)) * pxPerDay; }
+
+    // axis gridlines every 20 days
+    var axis = "";
+    for (var t = 0; t <= COVER_CAP; t += 20) {
+      var gx = dayX(t);
+      var major = (t === 0 || t === COVER_CAP) ? " major" : "";
+      axis += "<line class=\"r-grid" + major + "\" x1=\"" + round(gx, 1) + "\" y1=\"" + axisTop + "\" x2=\"" + round(gx, 1) + "\" y2=\"" + round(axisBottomY, 1) + "\"></line>";
+      var anchor = t === COVER_CAP ? "end" : "middle";
+      var lx = t === COVER_CAP ? gx - 6 : gx;
+      axis += "<text class=\"r-axis-label\" x=\"" + round(lx, 1) + "\" y=\"26\" text-anchor=\"" + anchor + "\">" + t + "</text>";
+    }
+
+    var tracks = rows.map(function track(row, i) {
+      var top = barTop0 + i * rowH;
+      var midY = top + barH / 2 + 4;
+      var cover = row.metrics.daysOfCover;
+      var lead = row.lead_time_days;
+      var coverX = dayX(cover);
+      var leadX = dayX(lead);
+      var isExp = row.action === "expedite";
+      var shortDays = Math.max(0, Math.ceil(lead - cover));
+
+      var parts = [
+        "<g class=\"track-group\">",
+        "<text class=\"track-sku\" x=\"0\" y=\"" + (top + 9) + "\">" + escapeHtml(row.sku) + "</text>",
+        "<text class=\"track-name\" x=\"0\" y=\"" + (top + 23) + "\">" + escapeHtml(truncate(row.product_name, 26)) + "</text>",
+        "<rect class=\"track-base\" x=\"" + plotX0 + "\" y=\"" + top + "\" width=\"" + plotW + "\" height=\"" + barH + "\" rx=\"5\"></rect>",
+        "<rect class=\"bar\" x=\"" + plotX0 + "\" y=\"" + top + "\" width=\"" + round(coverX - plotX0, 1) + "\" height=\"" + barH + "\" rx=\"5\" fill=\"url(#gExp)\"></rect>"
+      ];
+
+      // red gap when cover < lead
+      if (cover < lead) {
+        var gapEnd = Math.min(leadX, plotX1);
+        parts.push("<rect x=\"" + round(coverX, 1) + "\" y=\"" + top + "\" width=\"" + round(Math.max(0, gapEnd - coverX), 1) + "\" height=\"" + barH + "\" rx=\"5\" fill=\"url(#hatch)\" style=\"stroke:var(--exp)\" stroke-width=\"1\"></rect>");
+        if (shortDays > 0) {
+          parts.push("<text class=\"short-label\" x=\"" + round((coverX + gapEnd) / 2, 1) + "\" y=\"" + midY + "\" text-anchor=\"middle\">" + shortDays + " days short</text>");
+        }
+      }
+
+      // cover end label
+      var coverLabel = fmtDays(cover) + "d";
+      if (coverX - plotX0 > 42) {
+        parts.push("<text class=\"cover-end-label\" x=\"" + round(coverX, 1) + "\" y=\"" + midY + "\" fill=\"#fff\" text-anchor=\"end\" dx=\"-6\">" + coverLabel + "</text>");
+      } else {
+        parts.push("<text class=\"cover-end-label\" x=\"" + round(coverX, 1) + "\" y=\"" + midY + "\" style=\"fill:" + ACTION_COLOR.expedite.ink + "\" text-anchor=\"start\" dx=\"6\">" + coverLabel + "</text>");
+      }
+
+      // restock marker at lead time (only if within axis)
+      if (lead <= COVER_CAP) {
+        parts.push("<line class=\"marker-line\" x1=\"" + round(leadX, 1) + "\" y1=\"" + (top - 5) + "\" x2=\"" + round(leadX, 1) + "\" y2=\"" + (top + barH + 5) + "\"></line>");
+        parts.push("<polygon points=\"" + round(leadX - 6, 1) + "," + (top - 5) + " " + round(leadX + 6, 1) + "," + (top - 5) + " " + round(leadX, 1) + "," + (top + 2) + "\" style=\"fill:var(--ink)\"></polygon>");
+        parts.push("<text class=\"marker-label\" x=\"" + round(leadX, 1) + "\" y=\"" + (top + barH + 17) + "\" text-anchor=\"middle\">restock arrives · day " + fmtNumber(lead, 0) + "</text>");
+      } else {
+        parts.push("<text class=\"marker-label\" x=\"" + (plotX1 - 4) + "\" y=\"" + (top + barH + 17) + "\" text-anchor=\"end\">restock · day " + fmtNumber(lead, 0) + " (off chart)</text>");
+      }
+      parts.push("</g>");
+      return parts.join("");
+    }).join("");
+
+    var viewAll = totalAtRisk > rows.length
+      ? "<div class=\"view-all-note\">Showing the <b>" + rows.length + " most exposed</b> of <b>" + totalAtRisk + " SKUs at risk</b>. The rest appear in the full report.</div>"
+      : "";
+
+    return head + [
+      "<div class=\"card card-pad\">",
+      "<div class=\"runway-legend\">",
+      "<div class=\"item\"><span class=\"lg-bar\"></span> Cover bar — days of stock you have left</div>",
+      "<div class=\"item\"><span class=\"lg-marker\"></span> Restock marker — when a reorder would arrive</div>",
+      "<div class=\"item\"><span class=\"lg-gap\"></span> Red gap — days you'd be out of stock</div>",
+      "</div>",
+      "<svg class=\"runway\" viewBox=\"0 0 1024 " + round(vbH, 0) + "\" role=\"img\" aria-label=\"Stockout runway timeline for at-risk SKUs\">",
+      "<defs>",
+      "<linearGradient id=\"gExp\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\"><stop offset=\"0\" style=\"stop-color:var(--exp)\" stop-opacity=\"0.82\"></stop><stop offset=\"1\" style=\"stop-color:var(--exp)\"></stop></linearGradient>",
+      "<pattern id=\"hatch\" width=\"8\" height=\"8\" patternTransform=\"rotate(45)\" patternUnits=\"userSpaceOnUse\"><rect width=\"8\" height=\"8\" style=\"fill:var(--exp-bg)\"></rect><rect width=\"4\" height=\"8\" style=\"fill:var(--exp)\" fill-opacity=\"0.5\"></rect></pattern>",
+      "</defs>",
+      "<text class=\"r-axis-title\" x=\"236\" y=\"14\" text-anchor=\"start\">Days from today  →</text>",
+      axis,
+      tracks,
+      "<line class=\"r-grid major\" x1=\"236\" y1=\"" + round(axisBottomY, 1) + "\" x2=\"1024\" y2=\"" + round(axisBottomY, 1) + "\"></line>",
+      "<text class=\"r-axis-title\" x=\"630\" y=\"" + round(axisBottomY + 32, 1) + "\" text-anchor=\"middle\">Days of stock remaining vs. when a reorder would land</text>",
+      "</svg>",
+      viewAll,
+      "<div class=\"info-caption\"><span class=\"ico\">i</span><span>If a bar ends <b>before</b> the restock marker, you run out before new stock can arrive. The red gap is how many days you'd be sold out — order those SKUs today (or rush them) to close it.</span></div>",
+      "</div>"
+    ].join("");
+  }
+
+  function truncate(text, max) {
+    var s = String(text || "");
+    return s.length > max ? s.slice(0, max - 1) + "…" : s;
+  }
+
+  // ---- 5 · CASH vs URGENCY BUBBLE --------------------------------------
+  function renderBubble() {
+    var rows = state.rows.filter(function f(row) { return row.action !== "hold" || stakeValue(row) > 0; });
+    // include all action rows; plot only those with a dollar stake or units to show
+    var actionRows = state.rows.filter(function f(row) { return row.action !== "review"; });
+
+    var head = [
+      "<div class=\"section-head\">",
+      "<h2>Cash vs urgency</h2>",
+      "<div class=\"cap\">One view of every SKU at once: how soon it sells out, how much money is on the line, and how much stock you're holding.</div>",
+      "</div>"
+    ].join("");
+
+    if (!actionRows.length) {
+      return head + "<div class=\"card card-pad\"><div class=\"info-caption\"><span class=\"ico\">i</span><span>Nothing to plot — no SKUs with a recommended action this week.</span></div></div>";
+    }
+
+    // geometry
+    var vbW = 1000, vbH = 560;
+    var plotL = 92, plotR = 836, plotT = 44, plotB = 480;
+    var deadL = 856, deadR = 968;
+
+    var maxStake = actionRows.reduce(function m(acc, r) { return Math.max(acc, stakeValue(r)); }, 0);
+    var stakeMax = niceCeil(maxStake) || 100;
+    var maxUnits = actionRows.reduce(function m(acc, r) { return Math.max(acc, r.inventory_on_hand); }, 0) || 1;
+
+    function xCover(d) { return plotL + Math.min(COVER_CAP, Math.max(0, d)) / COVER_CAP * (plotR - plotL); }
+    function yStake(v) { return plotB - Math.min(stakeMax, Math.max(0, v)) / stakeMax * (plotB - plotT); }
+    function rUnits(u) { return 7 + Math.sqrt(Math.max(0, u) / maxUnits) * 27; }
+
+    // y gridlines (dollars)
+    var yGrid = "";
+    for (var gi = 0; gi <= 5; gi++) {
+      var frac = gi / 5;
+      var yy = plotB - frac * (plotB - plotT);
+      var val = stakeMax * frac;
+      yGrid += "<line class=\"b-grid\" x1=\"" + plotL + "\" y1=\"" + round(yy, 1) + "\" x2=\"" + deadR + "\" y2=\"" + round(yy, 1) + "\"></line>";
+      yGrid += "<text class=\"axis-label\" x=\"" + (plotL - 8) + "\" y=\"" + round(yy + 4, 1) + "\" text-anchor=\"end\">" + fmtMoney(val) + "</text>";
+    }
+    // x ticks (days of cover)
+    var xGrid = "<line class=\"b-grid\" x1=\"" + plotL + "\" y1=\"" + plotB + "\" x2=\"" + plotR + "\" y2=\"" + plotB + "\"></line>";
+    for (var xi = 0; xi <= COVER_CAP; xi += 15) {
+      var xx = xCover(xi);
+      var lbl = xi === COVER_CAP ? COVER_CAP + "+" : String(xi);
+      xGrid += "<line class=\"b-grid\" x1=\"" + round(xx, 1) + "\" y1=\"" + plotB + "\" x2=\"" + round(xx, 1) + "\" y2=\"" + (plotB + 6) + "\"></line>";
+      xGrid += "<text class=\"axis-label\" x=\"" + round(xx, 1) + "\" y=\"" + (plotB + 20) + "\" text-anchor=\"middle\">" + lbl + "</text>";
+    }
+
+    var deadCount = 0;
+    var deadTotal = actionRows.filter(function f(r) { return r.action === "markdown"; }).length;
+    var bubbles = actionRows.map(function bub(row) {
+      var isDead = row.action === "markdown";
+      var color = ACTION_COLOR[row.action].ink;
+      var stake = stakeValue(row);
+      var cx, cy, radius = rUnits(row.inventory_on_hand);
+      if (isDead) {
+        // place in right-edge band, spread vertically by stake; cap radius
+        radius = Math.min(radius, 30);
+        var bandSlots = Math.max(1, deadTotal);
+        cx = deadL + ((deadR - deadL) / (bandSlots + 1)) * (deadCount + 1);
+        cy = yStake(stake);
+        deadCount += 1;
+      } else {
+        cx = xCover(row.metrics.daysOfCover);
+        cy = yStake(stake);
+      }
+      var op = isDead ? 0.66 : (row.action === "hold" ? 0.7 : 0.78);
+      var daysText = Number.isFinite(row.metrics.daysOfCover) ? fmtDays(row.metrics.daysOfCover) + " days" : "No recent sales";
+      var stakeLabel = isDead ? "Cash tied up" : "Reorder cash";
+      return [
+        "<g class=\"bubble\" data-name=\"" + escapeHtml(row.product_name) + "\" data-sku=\"" + escapeHtml(row.sku) + "\"",
+        " data-days=\"" + escapeHtml(daysText) + "\" data-stake=\"" + escapeHtml(fmtMoney(stake)) + "\" data-stakelabel=\"" + stakeLabel + "\"",
+        " data-units=\"" + escapeHtml(fmtNumber(row.inventory_on_hand, 0)) + "\" data-action=\"" + ACTION_COLOR[row.action].label.toUpperCase() + "\">",
+        "<circle cx=\"" + round(cx, 1) + "\" cy=\"" + round(cy, 1) + "\" r=\"" + round(radius, 1) + "\" style=\"fill:" + color + ";stroke:" + color + "\" fill-opacity=\"" + op + "\" stroke-width=\"1.2\"></circle>",
+        (radius >= 11 ? "<text class=\"bubble-id\" x=\"" + round(cx, 1) + "\" y=\"" + round(cy + 3.4, 1) + "\" text-anchor=\"middle\">" + escapeHtml(shortSku(row.sku)) + "</text>" : ""),
+        "</g>"
+      ].join("");
+    }).join("");
+
+    var bandTint = deadTotal ? "<rect x=\"" + deadL + "\" y=\"" + plotT + "\" width=\"" + (deadR - deadL) + "\" height=\"" + (plotB - plotT) + "\" style=\"fill:var(--dead-bg)\" opacity=\"0.7\"></rect>" : "";
+    var bandLabel = deadTotal ? [
+      "<line x1=\"846\" y1=\"" + plotT + "\" x2=\"846\" y2=\"" + plotB + "\" style=\"stroke:var(--faint)\" stroke-width=\"1.5\" stroke-dasharray=\"2 4\"></line>",
+      "<text class=\"band-label\" x=\"912\" y=\"60\" text-anchor=\"middle\">Cash stuck in</text>",
+      "<text class=\"band-label\" x=\"912\" y=\"74\" text-anchor=\"middle\">slow movers</text>"
+    ].join("") : "";
+
+    return head + [
+      "<div class=\"card card-pad\">",
+      "<div class=\"bubble-head\">",
+      "<div><h3>Cash × Urgency map</h3><div class=\"hint\">Each bubble is one SKU. Further left = sooner sellout; higher up = more money at stake; bigger bubble = more units on hand.</div></div>",
+      "<div class=\"bubble-legend\" aria-label=\"Legend\">",
+      "<div class=\"item\"><span class=\"swatch\" style=\"background:var(--exp)\"></span>Expedite</div>",
+      "<div class=\"item\"><span class=\"swatch\" style=\"background:var(--reo)\"></span>Reorder</div>",
+      "<div class=\"item\"><span class=\"swatch\" style=\"background:var(--hold)\"></span>Hold</div>",
+      "<div class=\"item\"><span class=\"swatch\" style=\"background:var(--dead)\"></span>Deadstock</div>",
+      "<div class=\"size-key\"><span class=\"circ\"><span style=\"width:7px;height:7px;\"></span><span style=\"width:12px;height:12px;\"></span><span style=\"width:18px;height:18px;\"></span></span>units on hand</div>",
+      "</div>",
+      "</div>",
+      "<svg class=\"bubble-chart\" viewBox=\"0 0 " + vbW + " " + vbH + "\" role=\"img\" aria-label=\"Bubble chart of SKUs plotting days of cover against dollars at stake.\">",
+      "<rect x=\"" + plotL + "\" y=\"" + plotT + "\" width=\"" + round((plotR - plotL) / 2, 1) + "\" height=\"" + (plotB - plotT) + "\" style=\"fill:var(--exp-bg)\" opacity=\"0.55\"></rect>",
+      bandTint,
+      yGrid,
+      xGrid,
+      "<line class=\"quad-line\" x1=\"" + round((plotL + plotR) / 2, 1) + "\" y1=\"" + plotT + "\" x2=\"" + round((plotL + plotR) / 2, 1) + "\" y2=\"" + plotB + "\"></line>",
+      bandLabel,
+      "<text class=\"corner-label\" x=\"104\" y=\"62\" style=\"fill:var(--exp)\">Urgent &amp; costly — act first</text>",
+      bubbles,
+      "<text class=\"axis-title\" x=\"" + round((plotL + plotR) / 2, 1) + "\" y=\"528\" text-anchor=\"middle\">Days of cover  ·  how soon it sells out  →  less urgent</text>",
+      "<text class=\"axis-title\" x=\"26\" y=\"262\" text-anchor=\"middle\" transform=\"rotate(-90 26 262)\">Dollars at stake ($)</text>",
+      "</svg>",
+      "<div class=\"info-caption\"><span class=\"ico\">i</span><span><b>Top-left bubbles are the most urgent and most expensive — start there.</b> Deadstock SKUs sit in the right-hand band (months or years of cover); their value is cash already frozen. <b>Hover any bubble</b> for the full breakdown.</span></div>",
+      "</div>"
+    ].join("");
+  }
+
+  function stakeValue(row) {
+    if (row.action === "markdown") return row.metrics.cashTiedUp || 0;
+    return row.metrics.estimatedCashForReorder || row.metrics.cashTiedUp || 0;
+  }
+
+  // ---- 6 · TOP-10 RANKED TABLE -----------------------------------------
+  function renderTopTen(s) {
+    var ranked = sortedActionRows();
+    var top = ranked.slice(0, 10);
+
+    var bodyRows = top.map(function row(r, i) {
+      var color = ACTION_COLOR[r.action];
+      var coverCell;
+      if (r.action === "markdown" && !Number.isFinite(r.metrics.daysOfCover)) {
+        coverCell = "<div class=\"minibar\"><span class=\"track\"><span class=\"fill\" style=\"width:100%;background:" + color.ink + ";\"></span></span><span class=\"cover-val\">No sales</span></div>";
+      } else if (!Number.isFinite(r.metrics.daysOfCover)) {
+        coverCell = "<div class=\"minibar\"><span class=\"track\"></span><span class=\"cover-val\">No sales</span></div>";
+      } else {
+        var pct = Math.max(2, Math.min(100, Math.round(r.metrics.daysOfCover / COVER_CAP * 100)));
+        coverCell = "<div class=\"minibar\"><span class=\"track\"><span class=\"fill\" style=\"width:" + pct + "%;background:" + color.ink + ";\"></span></span>" +
+          "<span class=\"cover-val\">" + fmtDays(r.metrics.daysOfCover) + " <span class=\"unit\">days</span></span></div>";
+      }
+
+      var amtCell;
+      if (r.action === "markdown") {
+        amtCell = "<span class=\"amt frozen\">" + fmtMoney(r.metrics.cashTiedUp) + "</span><br><span class=\"lbl\">cash frozen</span>";
+      } else if (r.action === "expedite" || r.action === "reorder") {
+        amtCell = "<span class=\"amt reorder\">" + fmtMoney(r.metrics.estimatedCashForReorder) + "</span><br><span class=\"lbl\">to reorder</span>";
+      } else {
+        amtCell = "<span class=\"lbl\">" + fmtNumber(r.inventory_on_hand, 0) + " on hand</span>";
+      }
+
+      var qtyCell = (r.action === "expedite" || r.action === "reorder")
+        ? fmtNumber(r.metrics.reorderQuantity, 0) + " units"
+        : "<span class=\"dim-dash\">—</span>";
+
+      var chipExtra = (r.action === "markdown" && r.caveats.offSeasonCandidate) ? " <span style=\"font-weight:500;opacity:.8;\">· off-season</span>" : "";
+
+      return [
+        "<tr>",
+        "<td class=\"rank\">" + (i + 1) + "</td>",
+        "<td class=\"sku-cell\"><div class=\"sku\">" + escapeHtml(r.sku) + "</div><div class=\"pname\">" + escapeHtml(r.product_name) + "</div></td>",
+        "<td class=\"cover-cell\">" + coverCell + "</td>",
+        "<td><span class=\"chip " + color.chip + "\"><span class=\"cdot\"></span>" + color.label + chipExtra + "</span></td>",
+        "<td class=\"num\">" + qtyCell + "</td>",
+        "<td class=\"num action-amt\">" + amtCell + "</td>",
+        "</tr>"
+      ].join("");
+    }).join("");
+
+    return [
+      "<div class=\"section-head\">",
+      "<h2>Top 10 SKUs to act on</h2>",
+      "<div class=\"cap\">The 10 most urgent SKUs, ranked from soonest stockout to slowest mover. Bars show days of stock left (capped at " + COVER_CAP + " days); deadstock shows its frozen cash in violet.</div>",
+      "</div>",
+      "<div class=\"card\" style=\"overflow:hidden;\">",
+      "<table class=\"ranked\">",
+      "<thead><tr>",
+      "<th class=\"rank\">#</th>",
+      "<th>SKU / Product</th>",
+      "<th>Days of stock left</th>",
+      "<th>Action</th>",
+      "<th class=\"num\">Reorder qty</th>",
+      "<th class=\"num\">Reorder cost / cash frozen</th>",
+      "</tr></thead>",
+      "<tbody>" + bodyRows + "</tbody>",
+      "</table>",
+      "</div>",
+      renderGate(s)
+    ].join("");
+  }
+
+  // ---- 7 · EMAIL GATE / FULL REPORT ------------------------------------
+  function renderGate(s) {
+    var saved = readStoredEmail();
+    return [
+      "<div class=\"card gate\" data-gate>",
+      "<div class=\"gate-copy\">",
+      "<h3>Download the full report</h3>",
+      "<p>Showing <b>10 of " + fmtNumber(s.skuCount, 0) + " SKUs</b>. Get the complete CSV — all " + fmtNumber(s.skuCount, 0) + " SKUs with actions, days of cover, reorder quantities, and cash.</p>",
+      "</div>",
+      "<div class=\"gate-action\">",
+      "<button class=\"btn-primary\" type=\"button\" data-gate-open>Download full report</button>",
+      "</div>",
+      "<div class=\"gate-form\" data-gate-form hidden>",
+      "<div class=\"field\">",
+      "<input class=\"gate-input\" type=\"email\" inputmode=\"email\" autocomplete=\"email\" placeholder=\"you@store.com\" value=\"" + escapeHtml(saved || "") + "\" data-gate-email aria-label=\"Email address\">",
+      "<span class=\"gate-error\" data-gate-error></span>",
+      "</div>",
+      "<button class=\"btn-primary\" type=\"button\" data-gate-submit>Email me the report</button>",
+      "<div class=\"gate-fineprint\">We store your email only in this browser to remember you — no account, no server, nothing uploaded. The report downloads straight to your device.</div>",
+      "</div>",
+      "<div class=\"gate-success\" data-gate-success hidden>",
+      "<span class=\"ok-ico\">✓</span>",
+      "<span data-gate-success-text>Your report is downloading.</span>",
+      "<a href=\"#\" data-gate-redownload>Download again</a>",
+      "</div>",
+      "</div>"
+    ].join("");
+  }
+
+  // ---- 8 · FOOTER ------------------------------------------------------
+  function renderFooter() {
+    return [
+      "<div class=\"foot\">",
+      "Days of cover are capped at " + COVER_CAP + " days for readability; deadstock SKUs show their true days-of-cover, with value shown in violet as cash already frozen.<br>",
+      "<b>Processed locally in your browser — nothing is uploaded.</b>",
+      "</div>"
+    ].join("");
+  }
+
+  // ---- top-level render ------------------------------------------------
+  function renderAll() {
+    if (!state.rows.length) {
+      showEmptyState(true);
+      return;
+    }
+    state.summary = summarizePortfolio(state.rows);
+    var s = state.summary;
+    var rows = state.rows;
+    var dash = document.querySelector("[data-dashboard]");
+    if (!dash) return;
+    dash.innerHTML = [
+      renderSummaryBand(s),
+      "<div class=\"row-2up\">",
+      renderDonut(rows, s),
+      renderCashBar(),
+      "</div>",
+      renderRunway(),
+      renderBubble(),
+      renderTopTen(s),
+      renderFooter()
+    ].join("");
+    showEmptyState(false);
+    wireBubbleTooltips();
+  }
+
+  // ---- CSV export of all rows ------------------------------------------
+  function csvCell(value) {
+    var s = value === null || value === undefined ? "" : String(value);
+    if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+
+  function buildFullReportCsv() {
+    var header = ["sku", "product_name", "action", "days_of_cover", "lead_time_days", "on_hand", "available", "reorder_qty", "reorder_cash", "cash_tied_up", "vendor"];
+    var ranked = sortedActionRows();
+    var lines = [header.join(",")];
+    ranked.forEach(function each(row) {
+      var m = row.metrics;
+      var cover = Number.isFinite(m.daysOfCover) ? round(m.daysOfCover, 2) : "no_recent_sales";
+      var reorderCash = (row.action === "expedite" || row.action === "reorder") && m.estimatedCashForReorder !== null ? round(m.estimatedCashForReorder, 2) : "";
+      var cashTied = m.cashTiedUp !== null && m.cashTiedUp !== undefined ? round(m.cashTiedUp, 2) : "";
+      lines.push([
+        csvCell(row.sku),
+        csvCell(row.product_name),
+        csvCell(actionClass(row)),
+        csvCell(cover),
+        csvCell(row.lead_time_days),
+        csvCell(row.inventory_on_hand),
+        csvCell(m.availableInventory),
+        csvCell(row.action === "expedite" || row.action === "reorder" ? m.reorderQuantity : ""),
+        csvCell(reorderCash),
+        csvCell(cashTied),
+        csvCell(row.vendor || "")
+      ].join(","));
+    });
+    return lines.join("\r\n");
+  }
+
+  function downloadFullReport() {
+    var csv = buildFullReportCsv();
+    try {
+      var blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = "inventory-stockout-report.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function revoke() { URL.revokeObjectURL(url); }, 1500);
+    } catch (downloadError) {
+      /* file:// fallback — open as data URI */
+      try {
+        var uri = "data:text/csv;charset=utf-8," + encodeURIComponent(csv);
+        window.open(uri, "_blank");
+      } catch (fallbackError) { /* no-op */ }
+    }
+  }
+
+  function readStoredEmail() {
+    try { return window.localStorage.getItem(EMAIL_KEY); } catch (e) { return null; }
+  }
+
+  function storeEmail(email) {
+    try { window.localStorage.setItem(EMAIL_KEY, email); } catch (e) { /* private mode — ignore */ }
+  }
+
+  function isValidEmail(value) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+  }
+
+  // ---- bubble tooltips -------------------------------------------------
+  function wireBubbleTooltips() {
+    var tooltip = document.getElementById("tooltip");
+    if (!tooltip) return;
+    var bubbles = Array.prototype.slice.call(document.querySelectorAll(".bubble"));
+    var actionSoft = { EXPEDITE: "var(--exp-bg)", REORDER: "var(--reo-bg)", HOLD: "var(--hold-bg)", DEADSTOCK: "var(--dead-bg)" };
+    var actionInk = { EXPEDITE: "var(--exp)", REORDER: "var(--reo)", HOLD: "var(--hold)", DEADSTOCK: "var(--dead)" };
+
+    function build(el) {
+      var action = el.getAttribute("data-action");
+      tooltip.innerHTML =
+        "<div class=\"tt-name\">" + escapeHtml(el.getAttribute("data-name")) + "</div>" +
+        "<div class=\"tt-row\"><span>SKU</span><b>" + escapeHtml(el.getAttribute("data-sku")) + "</b></div>" +
+        "<div class=\"tt-row\"><span>Days of cover</span><b>" + escapeHtml(el.getAttribute("data-days")) + "</b></div>" +
+        "<div class=\"tt-row\"><span>" + escapeHtml(el.getAttribute("data-stakelabel")) + "</span><b>" + escapeHtml(el.getAttribute("data-stake")) + "</b></div>" +
+        "<div class=\"tt-row\"><span>On hand</span><b>" + escapeHtml(el.getAttribute("data-units")) + " units</b></div>" +
+        "<span class=\"tt-tag\" style=\"background:" + (actionSoft[action] || "var(--review-bg)") + ";color:" + (actionInk[action] || "var(--review)") + ";\">" + escapeHtml(action) + "</span>";
+    }
+    function position(evt) {
+      var pad = 14;
+      var x = evt.clientX + pad;
+      var y = evt.clientY + pad;
+      var rect = tooltip.getBoundingClientRect();
+      if (x + rect.width > window.innerWidth - 8) x = evt.clientX - rect.width - pad;
+      if (y + rect.height > window.innerHeight - 8) y = evt.clientY - rect.height - pad;
+      tooltip.style.left = x + "px";
+      tooltip.style.top = y + "px";
+    }
+    bubbles.forEach(function each(el) {
+      el.addEventListener("mouseenter", function enter(evt) {
+        build(el);
+        tooltip.classList.add("show");
+        position(evt);
+        bubbles.forEach(function dim(b) { if (b !== el) b.classList.add("dim"); });
+      });
+      el.addEventListener("mousemove", position);
+      el.addEventListener("mouseleave", function leave() {
+        tooltip.classList.remove("show");
+        bubbles.forEach(function undim(b) { b.classList.remove("dim"); });
+      });
+    });
+  }
+
+  // ---- load / status ---------------------------------------------------
+  function loadCsvText(text, label, source) {
+    showErrors([]);
+    var result = analyzeCsv(text);
+    if (!result.ok) {
+      state.rows = [];
+      state.summary = null;
+      state.dataQuality = null;
+      clearDashboard();
+      showEmptyState(true);
+      showErrors(result.errors);
+      track("csv_validation_error", { errors: result.errors.length });
+      return false;
+    }
+    state.rows = result.rows;
+    state.headers = result.headers;
+    state.dataQuality = result.dataQuality;
+    state.summary = result.summary;
+    state.selectedSku = null;
+    state.templateOverride = null;
+    showErrors([]);
+    setHeaderSub("Weekly stockout & deadstock review · " + (source === "sample" ? "sample data · " : "") + fmtNumber(state.rows.length, 0) + " SKUs");
+    renderAll();
+    if (source === "sample") track("sample_loaded", { rows: state.rows.length });
+    if (source === "upload") track("csv_uploaded", { rows: state.rows.length });
+    track("results_rendered", { rows: state.rows.length });
+    return true;
+  }
+
+  function loadSample() {
+    loadCsvText(SAMPLE_CSV, "Sample data loaded", "sample");
+  }
+
+  // ---- gate interactions -----------------------------------------------
+  function openGateForm(gate) {
+    var form = gate.querySelector("[data-gate-form]");
+    var success = gate.querySelector("[data-gate-success]");
+    var openBtn = gate.querySelector("[data-gate-open]");
+    if (success && !success.hidden) {
+      downloadFullReport();
+      return;
+    }
+    if (form) {
+      form.hidden = false;
+      if (openBtn) openBtn.parentElement.hidden = true;
+      var input = form.querySelector("[data-gate-email]");
+      if (input) input.focus();
+    }
+    track("download_report_clicked");
+  }
+
+  function submitGate(gate) {
+    var input = gate.querySelector("[data-gate-email]");
+    var errorEl = gate.querySelector("[data-gate-error]");
+    var form = gate.querySelector("[data-gate-form]");
+    var success = gate.querySelector("[data-gate-success]");
+    var successText = gate.querySelector("[data-gate-success-text]");
+    var email = input ? input.value.trim() : "";
+    if (!isValidEmail(email)) {
+      if (input) input.classList.add("invalid");
+      if (errorEl) errorEl.textContent = "Enter a valid email address (e.g. you@store.com).";
+      track("report_email_invalid");
+      return;
+    }
+    if (input) input.classList.remove("invalid");
+    if (errorEl) errorEl.textContent = "";
+    storeEmail(email);
+    if (form) form.hidden = true;
+    if (success) success.hidden = false;
+    if (successText) successText.textContent = "Saved " + email + " — your full report (" + fmtNumber(state.summary ? state.summary.skuCount : state.rows.length, 0) + " SKUs) is downloading.";
+    downloadFullReport();
+    track("report_email_submitted");
+  }
+
+  // ---- theme: light/dark for docktoai embedding + standalone -----------
+  var THEME_KEY = "docktoai_theme";
+  var SUN_GLYPH = "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"4.2\"></circle><path d=\"M12 2.5v2.4M12 19.1v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.5 12h2.4M19.1 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7\"></path></svg>";
+  var MOON_GLYPH = "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20.5 14.2A8 8 0 1 1 9.8 3.5a6.5 6.5 0 0 0 10.7 10.7z\"></path></svg>";
+
+  function currentTheme() {
+    var t = document.documentElement.getAttribute("data-theme");
+    return t === "dark" ? "dark" : "light";
+  }
+
+  function updateThemeToggleIcon() {
+    var btn = document.querySelector("[data-theme-toggle]");
+    if (!btn) return;
+    var isDark = currentTheme() === "dark";
+    // Show the glyph for the theme you'll switch TO.
+    btn.innerHTML = isDark ? SUN_GLYPH : MOON_GLYPH;
+    btn.setAttribute("aria-pressed", isDark ? "true" : "false");
+    btn.setAttribute("title", isDark ? "Switch to light theme" : "Switch to dark theme");
+  }
+
+  function applyTheme(theme, persist) {
+    var next = theme === "dark" ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", next);
+    if (persist) {
+      try { window.localStorage.setItem(THEME_KEY, next); } catch (e) { /* private mode — ignore */ }
+    }
+    updateThemeToggleIcon();
+    track("theme_changed", { theme: next });
+    return next;
+  }
+
+  function initTheme() {
+    updateThemeToggleIcon();
+    // Manual toggle for standalone use.
+    var btn = document.querySelector("[data-theme-toggle]");
+    if (btn) {
+      btn.addEventListener("click", function onToggle() {
+        applyTheme(currentTheme() === "dark" ? "light" : "dark", true);
+      });
+    }
+    // Host-site sync: docktoai can push the section's theme into the iframe.
+    window.addEventListener("message", function onMessage(event) {
+      var data = event.data;
+      if (!data || data.type !== "docktoai:set-theme") return;
+      if (data.theme !== "light" && data.theme !== "dark") return;
+      applyTheme(data.theme, true);
+    });
+    // Small global so the host (or QA) can flip the theme programmatically.
+    root.setDocktoaiTheme = function setDocktoaiTheme(theme) {
+      return applyTheme(theme, true);
+    };
+  }
+
+  function initUi() {
+    document.addEventListener("click", function onClick(event) {
+      var sampleButton = event.target.closest("[data-sample-button]");
+      var gateOpen = event.target.closest("[data-gate-open]");
+      var gateSubmit = event.target.closest("[data-gate-submit]");
+      var reDownload = event.target.closest("[data-gate-redownload]");
+
+      if (sampleButton) loadSample();
+      if (gateOpen) openGateForm(gateOpen.closest("[data-gate]"));
+      if (gateSubmit) submitGate(gateSubmit.closest("[data-gate]"));
+      if (reDownload) {
+        event.preventDefault();
+        downloadFullReport();
+        track("report_redownloaded");
+      }
+    });
+
+    document.addEventListener("keydown", function onKey(event) {
+      if (event.key === "Enter" && event.target.matches && event.target.matches("[data-gate-email]")) {
+        event.preventDefault();
+        var gate = event.target.closest("[data-gate]");
+        if (gate) submitGate(gate);
+      }
+    });
+
+    document.addEventListener("change", function onChange(event) {
+      if (event.target.matches("[data-file-input]")) {
+        var file = event.target.files && event.target.files[0];
+        if (!file) return;
+        file.text().then(function read(text) {
+          loadCsvText(text, file.name + " loaded", "upload");
+        }).catch(function error() {
+          showErrors(["Could not read file: " + file.name]);
+          track("csv_validation_error", { errors: 1 });
+        });
+      }
+    });
+
+    try {
+      if (typeof location !== "undefined") {
+        if (/[?&]sample=1/.test(location.search)) loadSample();
+      }
+    } catch (autoLoadError) {
+      /* no-op: ?sample=1 is a QA/demo/deep-link convenience only */
+    }
+  }
+
+  var api = {
+    track: track,
+    parseCsv: parseCsv,
+    validateHeaders: validateHeaders,
+    validateRows: validateRows,
+    normalizeRow: normalizeRow,
+    computeSafetyBufferDays: computeSafetyBufferDays,
+    calculateInventoryMetrics: calculateInventoryMetrics,
+    evaluateCaveats: evaluateCaveats,
+    determineAction: determineAction,
+    selectSupplierTemplate: selectSupplierTemplate,
+    buildSupplierDraft: buildSupplierDraft,
+    summarizeDataQuality: summarizeDataQuality,
+    summarizePortfolio: summarizePortfolio,
+    recalcRowForLeadTimeEdit: recalcRowForLeadTimeEdit,
+    analyzeCsv: analyzeCsv,
+    SAMPLE_CSV: SAMPLE_CSV
+  };
+
+  root.InventoryStockoutApp = api;
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  if (typeof document !== "undefined") { initTheme(); initUi(); }
+}(typeof window !== "undefined" ? window : globalThis));
+
+</script>
+<script>window.addEventListener("load",function(){var b=document.querySelector("[data-sample-button]");if(b)b.click();});</script>
+  </body>
+</html>

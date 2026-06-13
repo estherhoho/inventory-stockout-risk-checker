@@ -1,0 +1,2 @@
+sku,product_name,inventory_on_hand,units_sold_30d,units_sold_90d,lead_time_days,unit_cost,vendor,reorder_multiple,committed_units
+SKU-RUSH,Rush Reorder Item,8,60,120,30,4.5,Rush Supplier,10,4

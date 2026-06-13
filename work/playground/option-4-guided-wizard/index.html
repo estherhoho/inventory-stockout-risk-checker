@@ -1,0 +1,1399 @@
+<!-- Option 4: Guided Wizard -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inventory Stockout Risk Checker — Guided Wizard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --teal: #0D9488;
+      --teal-light: #CCFBF1;
+      --teal-dark: #0F766E;
+      --gray-50: #F8FAFC;
+      --gray-100: #F1F5F9;
+      --gray-200: #E2E8F0;
+      --gray-400: #94A3B8;
+      --gray-500: #64748B;
+      --gray-700: #334155;
+      --gray-900: #0F172A;
+      --red: #DC2626;
+      --red-light: #FEF2F2;
+      --red-border: #FECACA;
+      --amber: #D97706;
+      --amber-light: #FFFBEB;
+      --amber-border: #FDE68A;
+      --green: #059669;
+      --green-light: #ECFDF5;
+      --green-border: #A7F3D0;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.06);
+      --radius: 12px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #F0F4F8;
+      color: var(--gray-900);
+      min-height: 100vh;
+      padding-bottom: 100px;
+    }
+
+    /* ── Header ── */
+    .app-header {
+      background: white;
+      border-bottom: 1px solid var(--gray-200);
+      padding: 16px 24px;
+      text-align: center;
+    }
+    .app-header h1 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--teal);
+      letter-spacing: -0.2px;
+    }
+    .app-header p {
+      font-size: 12px;
+      color: var(--gray-500);
+      margin-top: 2px;
+    }
+
+    /* ── Progress indicator ── */
+    .progress-wrapper {
+      background: white;
+      border-bottom: 1px solid var(--gray-200);
+      padding: 16px 24px 12px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .progress-bar-track {
+      height: 4px;
+      background: var(--gray-200);
+      border-radius: 9999px;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--teal);
+      border-radius: 9999px;
+      transition: width 0.4s ease;
+    }
+    .step-indicators {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      align-items: flex-start;
+    }
+    .step-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      flex: 1;
+      max-width: 100px;
+    }
+    .step-dot {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      border: 2px solid var(--gray-200);
+      background: white;
+      color: var(--gray-400);
+      transition: all 0.3s ease;
+      flex-shrink: 0;
+    }
+    .step-dot.active {
+      border-color: var(--teal);
+      background: var(--teal);
+      color: white;
+    }
+    .step-dot.done {
+      border-color: var(--teal);
+      background: var(--teal-light);
+      color: var(--teal);
+    }
+    .step-label {
+      font-size: 10px;
+      color: var(--gray-400);
+      text-align: center;
+      line-height: 1.3;
+      transition: color 0.3s;
+    }
+    .step-label.active { color: var(--teal); font-weight: 600; }
+    .step-label.done { color: var(--teal); }
+
+    /* ── Main container ── */
+    .wizard-container {
+      max-width: 640px;
+      margin: 24px auto;
+      padding: 0 16px;
+    }
+
+    /* ── Step card ── */
+    .step-card {
+      background: white;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 32px;
+      display: none;
+      animation: fadeIn 0.3s ease;
+    }
+    .step-card.active { display: block; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .step-eyebrow {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--teal);
+      margin-bottom: 8px;
+    }
+    .step-heading {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--gray-900);
+      line-height: 1.3;
+      margin-bottom: 6px;
+    }
+    .step-subheading {
+      font-size: 15px;
+      color: var(--gray-500);
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+
+    /* ── Banners ── */
+    .banner {
+      display: flex;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+    .banner-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+    .banner.amber { background: var(--amber-light); border: 1px solid var(--amber-border); color: #92400E; }
+    .banner.red   { background: var(--red-light);   border: 1px solid var(--red-border);   color: #991B1B; }
+    .banner.info  { background: #EFF6FF;             border: 1px solid #BFDBFE;             color: #1E3A8A; }
+    .banner strong { font-weight: 600; }
+
+    /* ── Data quality checklist ── */
+    .field-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+    .field-table th {
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--gray-500);
+      padding: 0 0 8px;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    .field-table td {
+      padding: 10px 0;
+      border-bottom: 1px solid var(--gray-100);
+      vertical-align: middle;
+    }
+    .field-table tr:last-child td { border-bottom: none; }
+    .field-status { font-size: 18px; padding-right: 8px; }
+    .field-name { font-weight: 500; color: var(--gray-900); }
+    .field-desc { font-size: 12px; color: var(--gray-500); margin-top: 2px; }
+    .badge-used    { display: inline-block; background: var(--green-light); color: var(--green); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--green-border); }
+    .badge-missing { display: inline-block; background: var(--gray-100); color: var(--gray-500); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--gray-200); }
+
+    /* ── Expandable note ── */
+    .expandable { margin-bottom: 20px; }
+    .expandable summary {
+      font-size: 13px;
+      color: var(--teal);
+      cursor: pointer;
+      list-style: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-weight: 500;
+    }
+    .expandable summary::-webkit-details-marker { display: none; }
+    .expandable-body {
+      margin-top: 10px;
+      padding: 14px;
+      background: var(--gray-50);
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--gray-700);
+      line-height: 1.7;
+    }
+    .expandable-body code {
+      background: var(--gray-200);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    /* ── Row warning list ── */
+    .row-warning-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .row-warning-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: var(--amber-light);
+      border: 1px solid var(--amber-border);
+      font-size: 13px;
+    }
+    .sku-tag {
+      font-size: 11px;
+      font-weight: 700;
+      background: white;
+      border: 1px solid var(--amber-border);
+      color: var(--amber);
+      padding: 2px 7px;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+
+    /* ── Summary pill ── */
+    .summary-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 99px;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 20px;
+    }
+    .summary-pill.urgent { background: var(--red-light); color: var(--red); border: 1px solid var(--red-border); }
+    .summary-pill.warning { background: var(--amber-light); color: var(--amber); border: 1px solid var(--amber-border); }
+
+    /* ── Expedite cards ── */
+    .expedite-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+    .expedite-card {
+      border: 1px solid var(--gray-200);
+      border-radius: 10px;
+      padding: 16px;
+      position: relative;
+      transition: box-shadow 0.2s;
+    }
+    .expedite-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .expedite-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .product-info {}
+    .product-name { font-size: 15px; font-weight: 600; color: var(--gray-900); }
+    .product-sku  { font-size: 12px; color: var(--gray-400); margin-top: 1px; }
+    .cover-badge {
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .cover-number {
+      font-size: 28px;
+      font-weight: 800;
+      line-height: 1;
+      cursor: pointer;
+      border-bottom: 2px dashed var(--gray-300);
+      display: inline-block;
+    }
+    .cover-number.critical { color: var(--red); }
+    .cover-number.warning  { color: var(--amber); }
+    .cover-label { font-size: 10px; color: var(--gray-400); margin-top: 2px; }
+    .cover-edit-input {
+      font-size: 22px;
+      font-weight: 800;
+      width: 72px;
+      border: 2px solid var(--teal);
+      border-radius: 6px;
+      padding: 2px 6px;
+      text-align: center;
+      color: var(--red);
+      outline: none;
+    }
+    .expedite-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 13px;
+    }
+    .meta-chip {
+      background: var(--gray-100);
+      color: var(--gray-700);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+    .meta-chip.danger { background: var(--red-light); color: var(--red); border: 1px solid var(--red-border); }
+    .meta-chip.cost   { background: var(--green-light); color: var(--green); border: 1px solid var(--green-border); }
+    .lead-time-row {
+      font-size: 12px;
+      color: var(--gray-500);
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .edit-lt-btn {
+      background: none;
+      border: none;
+      color: var(--teal);
+      font-size: 12px;
+      cursor: pointer;
+      text-decoration: underline;
+      padding: 0;
+    }
+    .lt-input {
+      width: 50px;
+      border: 1px solid var(--teal);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-size: 12px;
+      text-align: center;
+      outline: none;
+      color: var(--gray-900);
+    }
+
+    /* ── Deadstock cards ── */
+    .deadstock-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+    .deadstock-card {
+      border: 1px solid var(--gray-200);
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .deadstock-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 8px;
+    }
+    .cash-pill {
+      background: var(--amber-light);
+      border: 1px solid var(--amber-border);
+      color: var(--amber);
+      font-size: 13px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+    .days-cover-text { font-size: 13px; color: var(--gray-500); margin-top: 4px; }
+    .offseason-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #F0F9FF;
+      border: 1px solid #BAE6FD;
+      color: #0369A1;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 6px;
+      margin-top: 6px;
+    }
+    .deadstock-action { font-size: 12px; color: var(--gray-500); margin-top: 8px; }
+    .deadstock-action strong { color: var(--gray-700); }
+
+    /* ── Supplier draft ── */
+    .sku-selector {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .sku-tab {
+      padding: 7px 14px;
+      border-radius: 8px;
+      border: 2px solid var(--gray-200);
+      background: white;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--gray-500);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .sku-tab.selected {
+      border-color: var(--teal);
+      background: var(--teal-light);
+      color: var(--teal);
+    }
+    .template-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .template-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--red-light);
+      border: 1px solid var(--red-border);
+      color: var(--red);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 6px;
+    }
+    .switch-link {
+      font-size: 13px;
+      color: var(--teal);
+      text-decoration: underline;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+    }
+    .draft-textarea {
+      width: 100%;
+      min-height: 280px;
+      border: 1px solid var(--gray-200);
+      border-radius: 10px;
+      padding: 16px;
+      font-size: 13px;
+      font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+      line-height: 1.7;
+      color: var(--gray-700);
+      background: var(--gray-50);
+      resize: vertical;
+      outline: none;
+    }
+    .copy-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--teal);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 12px;
+      transition: background 0.2s;
+    }
+    .copy-btn:hover { background: var(--teal-dark); }
+    .copy-btn.copied { background: var(--green); }
+    .draft-note {
+      font-size: 12px;
+      color: var(--gray-400);
+      margin-top: 10px;
+      line-height: 1.5;
+    }
+
+    /* ── Summary step ── */
+    .summary-boxes {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .summary-box {
+      border-radius: 10px;
+      padding: 16px 12px;
+      text-align: center;
+    }
+    .summary-box.urgent-box { background: var(--red-light); border: 1px solid var(--red-border); }
+    .summary-box.warning-box { background: var(--amber-light); border: 1px solid var(--amber-border); }
+    .summary-box.stable-box { background: var(--green-light); border: 1px solid var(--green-border); }
+    .summary-box-number { font-size: 32px; font-weight: 800; line-height: 1; }
+    .urgent-box .summary-box-number  { color: var(--red); }
+    .warning-box .summary-box-number { color: var(--amber); }
+    .stable-box .summary-box-number  { color: var(--green); }
+    .summary-box-label { font-size: 12px; font-weight: 600; margin-top: 4px; }
+    .urgent-box .summary-box-label  { color: var(--red); }
+    .warning-box .summary-box-label { color: var(--amber); }
+    .stable-box .summary-box-label  { color: var(--green); }
+
+    .next-actions { margin-bottom: 20px; }
+    .next-actions h3 { font-size: 15px; font-weight: 700; color: var(--gray-900); margin-bottom: 12px; }
+    .next-actions ol { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+    .next-action-item {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 12px;
+      border-radius: 8px;
+      background: var(--gray-50);
+      border: 1px solid var(--gray-100);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .action-num {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--teal);
+      color: white;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .cash-summary {
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: 10px;
+      padding: 14px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+    .cash-item { text-align: center; }
+    .cash-amount { font-size: 20px; font-weight: 800; color: var(--gray-900); }
+    .cash-label  { font-size: 11px; color: var(--gray-400); margin-top: 2px; }
+
+    .summary-btns { display: flex; gap: 10px; flex-wrap: wrap; }
+    .download-btn {
+      flex: 1;
+      min-width: 140px;
+      padding: 12px 20px;
+      border-radius: 8px;
+      background: var(--teal);
+      color: white;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .download-btn:hover { background: var(--teal-dark); }
+    .restart-btn {
+      flex: 1;
+      min-width: 140px;
+      padding: 12px 20px;
+      border-radius: 8px;
+      background: white;
+      color: var(--gray-700);
+      border: 2px solid var(--gray-200);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .restart-btn:hover { border-color: var(--gray-400); }
+
+    /* ── Nav buttons ── */
+    .step-nav {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 28px;
+      padding-top: 20px;
+      border-top: 1px solid var(--gray-100);
+    }
+    .btn-prev, .btn-next {
+      padding: 11px 22px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-prev {
+      background: white;
+      color: var(--gray-700);
+      border: 2px solid var(--gray-200);
+    }
+    .btn-prev:hover { border-color: var(--gray-400); }
+    .btn-next {
+      background: var(--teal);
+      color: white;
+      border: 2px solid var(--teal);
+    }
+    .btn-next:hover { background: var(--teal-dark); border-color: var(--teal-dark); }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--gray-900);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.3s ease;
+      z-index: 100;
+      white-space: nowrap;
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ── Back to gallery ── */
+    .back-link {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 13px;
+      color: var(--gray-500);
+      text-decoration: none;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+      z-index: 50;
+      transition: all 0.2s;
+    }
+    .back-link:hover { color: var(--teal); border-color: var(--teal); }
+
+    /* ── Mobile ── */
+    @media (max-width: 640px) {
+      .step-card { padding: 24px 18px; }
+      .step-heading { font-size: 19px; }
+      .summary-boxes { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+      .summary-box { padding: 12px 8px; }
+      .summary-box-number { font-size: 26px; }
+      .step-label { font-size: 9px; }
+      .step-dot { width: 24px; height: 24px; font-size: 11px; }
+      .cash-summary { flex-direction: column; align-items: flex-start; }
+      .wizard-container { padding: 0 12px; margin: 16px auto; }
+      .step-nav {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: white;
+        border-top: 1px solid var(--gray-200);
+        padding: 12px 16px;
+        margin: 0;
+        z-index: 20;
+        border-radius: 0;
+        justify-content: space-between;
+      }
+      body { padding-bottom: 72px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="app-header">
+  <h1>Inventory Stockout Risk Checker</h1>
+  <p>Guided walkthrough — 5 steps to your action plan</p>
+</div>
+
+<!-- Progress indicator -->
+<div class="progress-wrapper">
+  <div class="progress-bar-track">
+    <div class="progress-bar-fill" id="progressFill" style="width: 20%"></div>
+  </div>
+  <div class="step-indicators" id="stepIndicators">
+    <div class="step-item">
+      <div class="step-dot active" id="dot-1">1</div>
+      <div class="step-label active" id="label-1">Data Quality</div>
+    </div>
+    <div class="step-item">
+      <div class="step-dot" id="dot-2">2</div>
+      <div class="step-label" id="label-2">Stockout Risk</div>
+    </div>
+    <div class="step-item">
+      <div class="step-dot" id="dot-3">3</div>
+      <div class="step-label" id="label-3">Deadstock</div>
+    </div>
+    <div class="step-item">
+      <div class="step-dot" id="dot-4">4</div>
+      <div class="step-label" id="label-4">Supplier Draft</div>
+    </div>
+    <div class="step-item">
+      <div class="step-dot" id="dot-5">5</div>
+      <div class="step-label" id="label-5">Summary</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- STEP 1: Data Quality Review                -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="wizard-container">
+
+  <div class="step-card active" id="step-1">
+    <div class="step-eyebrow">Step 1 of 5</div>
+    <h2 class="step-heading">Data Quality Check</h2>
+    <p class="step-subheading">10 SKUs analyzed. Your file included 4 of 6 optional fields — here's what was found.</p>
+
+    <table class="field-table">
+      <thead>
+        <tr>
+          <th style="width:36px;"></th>
+          <th>Optional Field</th>
+          <th style="text-align:right;">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="field-status">✅</td>
+          <td>
+            <div class="field-name">unit_cost</div>
+            <div class="field-desc">Enables cash-at-risk estimates</div>
+          </td>
+          <td style="text-align:right;"><span class="badge-used">Used</span></td>
+        </tr>
+        <tr>
+          <td class="field-status">✅</td>
+          <td>
+            <div class="field-name">vendor</div>
+            <div class="field-desc">Auto-fills supplier draft emails</div>
+          </td>
+          <td style="text-align:right;"><span class="badge-used">Used</span></td>
+        </tr>
+        <tr>
+          <td class="field-status">✅</td>
+          <td>
+            <div class="field-name">incoming_units</div>
+            <div class="field-desc">Adjusts days of cover for in-transit stock</div>
+          </td>
+          <td style="text-align:right;"><span class="badge-used">Used</span></td>
+        </tr>
+        <tr>
+          <td class="field-status">✅</td>
+          <td>
+            <div class="field-name">committed_units</div>
+            <div class="field-desc">Reduces available inventory for open orders</div>
+          </td>
+          <td style="text-align:right;"><span class="badge-used">Used</span></td>
+        </tr>
+        <tr>
+          <td class="field-status" style="color:var(--gray-300);">○</td>
+          <td>
+            <div class="field-name">reorder_multiple</div>
+            <div class="field-desc">Would round order quantities to pack sizes</div>
+          </td>
+          <td style="text-align:right;"><span class="badge-missing">Not provided</span></td>
+        </tr>
+        <tr>
+          <td class="field-status" style="color:var(--gray-300);">○</td>
+          <td>
+            <div class="field-name">category</div>
+            <div class="field-desc">Would enable category-level summaries</div>
+          </td>
+          <td style="text-align:right;"><span class="badge-missing">Not provided</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="banner info">
+      <div class="banner-icon">💡</div>
+      <div>
+        <strong>Estimated cash for reorder: enabled</strong><br>
+        Unit cost values present — all reorder estimates include dollar amounts.<br>
+        <strong>Committed units subtracted from available inventory: enabled</strong>
+      </div>
+    </div>
+
+    <div class="banner amber">
+      <div class="banner-icon">⚠️</div>
+      <div>
+        <strong>Verify net of returns</strong> — Available inventory is calculated from on-hand stock. If your system does not already net out pending returns, your available units may be overstated.
+      </div>
+    </div>
+
+    <p style="font-size:13px; font-weight:600; color:var(--gray-700); margin-bottom:10px;">Row-level notes (2 rows affected)</p>
+    <ul class="row-warning-list">
+      <li class="row-warning-item">
+        <span class="sku-tag">SKU-1001</span>
+        <span>Committed units (10) are reducing available inventory — net available may be lower than on-hand stock.</span>
+      </li>
+      <li class="row-warning-item">
+        <span class="sku-tag">SKU-1007</span>
+        <span>Committed units (8) are reducing available inventory — verify these orders are correct before reordering.</span>
+      </li>
+    </ul>
+
+    <details class="expandable">
+      <summary>▸ How is available inventory calculated?</summary>
+      <div class="expandable-body">
+        <strong>Available inventory formula:</strong><br><br>
+        <code>available = on_hand − committed_units + incoming_units</code><br><br>
+        <strong>Days of cover formula:</strong><br><br>
+        <code>days_of_cover = available ÷ avg_daily_sales</code><br><br>
+        where <code>avg_daily_sales</code> is derived from recent 30–90 day sales velocity. If <code>incoming_units</code> is missing, it is treated as 0. If <code>committed_units</code> is missing, no deduction is applied.
+      </div>
+    </details>
+
+    <div class="step-nav">
+      <button class="btn-next" onclick="goToStep(2)">Review Stockout Risk →</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- STEP 2: Stockout Risk                       -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="step-card" id="step-2">
+    <div class="step-eyebrow">Step 2 of 5</div>
+    <h2 class="step-heading">Stockout Risk</h2>
+    <p class="step-subheading">These 4 SKUs are projected to run out before your next reorder arrives.</p>
+
+    <div><span class="summary-pill urgent">🚨 4 SKUs need expediting now</span></div>
+
+    <div class="banner amber">
+      <div class="banner-icon">⚠️</div>
+      <div><strong>Verify net of returns</strong> — SKU-1001 and SKU-1007 have committed units. Confirm these numbers are accurate before placing emergency orders.</div>
+    </div>
+
+    <div class="expedite-list">
+
+      <!-- SKU-1004 -->
+      <div class="expedite-card">
+        <div class="expedite-card-header">
+          <div class="product-info">
+            <div class="product-name">Cotton Drawer Organizer</div>
+            <div class="product-sku">SKU-1004 · Northstar Home</div>
+          </div>
+          <div class="cover-badge">
+            <div class="cover-number critical" id="cover-1004" title="Click to edit" onclick="editCover(this, 'input-1004')">1.2</div>
+            <input class="cover-edit-input" id="input-1004" style="display:none;" type="number" step="0.1" value="1.2" onblur="saveCover(this, 'cover-1004')" onkeydown="if(event.key==='Enter')this.blur()" />
+            <div class="cover-label">days of cover</div>
+          </div>
+        </div>
+        <div class="expedite-meta">
+          <span class="meta-chip danger">🔴 Expedite — 29 days short</span>
+          <span class="meta-chip">Reorder: 108 units</span>
+          <span class="meta-chip cost">Est. $513</span>
+        </div>
+        <div class="lead-time-row">
+          Lead time: <span id="lt-display-1004">30 days</span>
+          <button class="edit-lt-btn" onclick="editLeadTime('lt-display-1004','lt-input-1004')">Edit</button>
+          <input class="lt-input" id="lt-input-1004" type="number" style="display:none;" value="30" min="1" max="365"
+            onblur="saveLeadTime('lt-display-1004','lt-input-1004')"
+            onkeydown="if(event.key==='Enter')this.blur()" />
+        </div>
+      </div>
+
+      <!-- SKU-1001 -->
+      <div class="expedite-card">
+        <div class="expedite-card-header">
+          <div class="product-info">
+            <div class="product-name">Bamboo Storage Bin — Small</div>
+            <div class="product-sku">SKU-1001 · Northstar Home</div>
+          </div>
+          <div class="cover-badge">
+            <div class="cover-number critical" id="cover-1001" title="Click to edit" onclick="editCover(this, 'input-1001')">10.7</div>
+            <input class="cover-edit-input" id="input-1001" style="display:none;" type="number" step="0.1" value="10.7" onblur="saveCover(this, 'cover-1001')" onkeydown="if(event.key==='Enter')this.blur()" />
+            <div class="cover-label">days of cover</div>
+          </div>
+        </div>
+        <div class="expedite-meta">
+          <span class="meta-chip danger">🔴 Expedite — 17 days short</span>
+          <span class="meta-chip">Reorder: 144 units</span>
+          <span class="meta-chip cost">Est. $1,224</span>
+        </div>
+        <div class="lead-time-row">
+          Lead time: <span id="lt-display-1001">30 days</span>
+          <button class="edit-lt-btn" onclick="editLeadTime('lt-display-1001','lt-input-1001')">Edit</button>
+          <input class="lt-input" id="lt-input-1001" type="number" style="display:none;" value="30" min="1" max="365"
+            onblur="saveLeadTime('lt-display-1001','lt-input-1001')"
+            onkeydown="if(event.key==='Enter')this.blur()" />
+        </div>
+      </div>
+
+      <!-- SKU-1007 -->
+      <div class="expedite-card">
+        <div class="expedite-card-header">
+          <div class="product-info">
+            <div class="product-name">Glass Meal Prep Container 3pk</div>
+            <div class="product-sku">SKU-1007 · Blue Ridge Goods</div>
+          </div>
+          <div class="cover-badge">
+            <div class="cover-number warning" id="cover-1007" title="Click to edit" onclick="editCover(this, 'input-1007')">16.4</div>
+            <input class="cover-edit-input" id="input-1007" style="display:none;" type="number" step="0.1" value="16.4" onblur="saveCover(this, 'cover-1007')" onkeydown="if(event.key==='Enter')this.blur()" />
+            <div class="cover-label">days of cover</div>
+          </div>
+        </div>
+        <div class="expedite-meta">
+          <span class="meta-chip danger">🔴 Expedite — 44 days short</span>
+          <span class="meta-chip">Reorder: 18 units</span>
+          <span class="meta-chip cost">Est. $194</span>
+        </div>
+        <div class="lead-time-row">
+          Lead time: <span id="lt-display-1007">30 days</span>
+          <button class="edit-lt-btn" onclick="editLeadTime('lt-display-1007','lt-input-1007')">Edit</button>
+          <input class="lt-input" id="lt-input-1007" type="number" style="display:none;" value="30" min="1" max="365"
+            onblur="saveLeadTime('lt-display-1007','lt-input-1007')"
+            onkeydown="if(event.key==='Enter')this.blur()" />
+        </div>
+      </div>
+
+      <!-- SKU-1002 -->
+      <div class="expedite-card">
+        <div class="expedite-card-header">
+          <div class="product-info">
+            <div class="product-name">Bamboo Storage Bin — Large</div>
+            <div class="product-sku">SKU-1002 · Northstar Home</div>
+          </div>
+          <div class="cover-badge">
+            <div class="cover-number warning" id="cover-1002" title="Click to edit" onclick="editCover(this, 'input-1002')">17.5</div>
+            <input class="cover-edit-input" id="input-1002" style="display:none;" type="number" step="0.1" value="17.5" onblur="saveCover(this, 'cover-1002')" onkeydown="if(event.key==='Enter')this.blur()" />
+            <div class="cover-label">days of cover</div>
+          </div>
+        </div>
+        <div class="expedite-meta">
+          <span class="meta-chip danger">🔴 Expedite — 18 days short</span>
+          <span class="meta-chip">Reorder: 120 units</span>
+          <span class="meta-chip cost">Est. $1,470</span>
+        </div>
+        <div class="lead-time-row">
+          Lead time: <span id="lt-display-1002">30 days</span>
+          <button class="edit-lt-btn" onclick="editLeadTime('lt-display-1002','lt-input-1002')">Edit</button>
+          <input class="lt-input" id="lt-input-1002" type="number" style="display:none;" value="30" min="1" max="365"
+            onblur="saveLeadTime('lt-display-1002','lt-input-1002')"
+            onkeydown="if(event.key==='Enter')this.blur()" />
+        </div>
+      </div>
+
+    </div>
+
+    <div class="step-nav">
+      <button class="btn-prev" onclick="goToStep(1)">← Back</button>
+      <button class="btn-next" onclick="goToStep(3)">Review Deadstock →</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- STEP 3: Deadstock Review                   -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="step-card" id="step-3">
+    <div class="step-eyebrow">Step 3 of 5</div>
+    <h2 class="step-heading">Deadstock Candidates</h2>
+    <p class="step-subheading">3 SKUs may be tying up <strong>$2,296</strong> in cash. Review before deciding on markdowns or liquidation.</p>
+
+    <div class="banner amber">
+      <div class="banner-icon">⚠️</div>
+      <div>These are <strong>candidates only</strong>. Off-season and holiday SKUs may appear here falsely. Use your judgment alongside the data.</div>
+    </div>
+
+    <div class="deadstock-list">
+
+      <!-- SKU-1003 -->
+      <div class="deadstock-card">
+        <div class="deadstock-header">
+          <div>
+            <div class="product-name">Silicone Travel Bottle Set</div>
+            <div class="product-sku" style="font-size:12px; color:var(--gray-400); margin-top:1px;">SKU-1003 · Blue Ridge Goods</div>
+          </div>
+          <span class="cash-pill">$744 tied up</span>
+        </div>
+        <div class="days-cover-text">📦 587 days of cover — far beyond typical reorder cycle</div>
+        <div class="deadstock-action"><strong>Recommended:</strong> Review before markdown or liquidation referral.</div>
+      </div>
+
+      <!-- SKU-1005 -->
+      <div class="deadstock-card">
+        <div class="deadstock-header">
+          <div>
+            <div class="product-name">Reusable Produce Bag Set</div>
+            <div class="product-sku" style="font-size:12px; color:var(--gray-400); margin-top:1px;">SKU-1005 · Greenline Supply</div>
+          </div>
+          <span class="cash-pill">$682 tied up</span>
+        </div>
+        <div class="days-cover-text">📦 No recent sales detected in analysis window</div>
+        <div class="deadstock-action"><strong>Recommended:</strong> Confirm listing is active and priced correctly. Consider a promotion.</div>
+      </div>
+
+      <!-- SKU-1010 -->
+      <div class="deadstock-card">
+        <div class="deadstock-header">
+          <div>
+            <div class="product-name">Holiday Gift Wrap Bundle</div>
+            <div class="product-sku" style="font-size:12px; color:var(--gray-400); margin-top:1px;">SKU-1010 · Seasonal House</div>
+          </div>
+          <span class="cash-pill">$870 tied up</span>
+        </div>
+        <div class="days-cover-text">📦 1,791 days of cover — very high, but may be seasonal</div>
+        <div class="offseason-badge">📅 Off-season caveat</div>
+        <div class="deadstock-action" style="margin-top:10px;"><strong>Recommended:</strong> Cross-reference against your seasonal calendar before marking down. This may be intentional holiday carry-over stock.</div>
+      </div>
+
+    </div>
+
+    <div class="step-nav">
+      <button class="btn-prev" onclick="goToStep(2)">← Back</button>
+      <button class="btn-next" onclick="goToStep(4)">Draft Supplier Email →</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- STEP 4: Supplier Draft                     -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="step-card" id="step-4">
+    <div class="step-eyebrow">Step 4 of 5</div>
+    <h2 class="step-heading">Supplier Draft</h2>
+    <p class="step-subheading">Choose a SKU below to generate a ready-to-send supplier email. Edit before sending.</p>
+
+    <div class="sku-selector" id="skuTabs">
+      <button class="sku-tab selected" data-sku="1004" onclick="selectSku(this, '1004')">SKU-1004</button>
+      <button class="sku-tab" data-sku="1001" onclick="selectSku(this, '1001')">SKU-1001</button>
+      <button class="sku-tab" data-sku="1007" onclick="selectSku(this, '1007')">SKU-1007</button>
+      <button class="sku-tab" data-sku="1002" onclick="selectSku(this, '1002')">SKU-1002</button>
+    </div>
+
+    <div class="template-row">
+      <span class="template-badge">🚨 URGENT EXPEDITE template</span>
+      <button class="switch-link" onclick="showToast('Standard reorder template available in the full tool.')">Switch to standard reorder</button>
+    </div>
+
+    <textarea class="draft-textarea" id="draftTextarea" readonly></textarea>
+
+    <button class="copy-btn" id="copyBtn" onclick="copyDraft()">
+      <span>📋</span> Copy to clipboard
+    </button>
+    <div class="draft-note">Edit the draft before sending. Confirm vendor contact details are up to date. This draft was auto-generated — review all quantities and dates.</div>
+
+    <div class="step-nav">
+      <button class="btn-prev" onclick="goToStep(3)">← Back</button>
+      <button class="btn-next" onclick="goToStep(5)">View Summary →</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- STEP 5: Summary & Next Actions             -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="step-card" id="step-5">
+    <div class="step-eyebrow">Step 5 of 5</div>
+    <h2 class="step-heading">Your Action Summary</h2>
+    <p class="step-subheading">Review complete. Here's what to prioritize this week.</p>
+
+    <div class="summary-boxes">
+      <div class="summary-box urgent-box">
+        <div class="summary-box-number">4</div>
+        <div class="summary-box-label">Expedite Now</div>
+      </div>
+      <div class="summary-box warning-box">
+        <div class="summary-box-number">3</div>
+        <div class="summary-box-label">Deadstock</div>
+      </div>
+      <div class="summary-box stable-box">
+        <div class="summary-box-number">3</div>
+        <div class="summary-box-label">Stable</div>
+      </div>
+    </div>
+
+    <div class="cash-summary">
+      <div class="cash-item">
+        <div class="cash-amount">~$3,401</div>
+        <div class="cash-label">Est. reorder commitment</div>
+      </div>
+      <div style="width:1px; height:36px; background:var(--gray-200);"></div>
+      <div class="cash-item">
+        <div class="cash-amount">$2,296</div>
+        <div class="cash-label">Cash in deadstock</div>
+      </div>
+      <div style="width:1px; height:36px; background:var(--gray-200);"></div>
+      <div class="cash-item">
+        <div class="cash-amount">10</div>
+        <div class="cash-label">SKUs analyzed</div>
+      </div>
+    </div>
+
+    <div class="next-actions">
+      <h3>Next Actions</h3>
+      <ol>
+        <li class="next-action-item">
+          <span class="action-num">1</span>
+          <span>Contact <strong>Northstar Home today</strong> re: SKU-1004 Cotton Drawer Organizer — expedite request draft ready in Step 4.</span>
+        </li>
+        <li class="next-action-item">
+          <span class="action-num">2</span>
+          <span>Contact <strong>Blue Ridge Goods</strong> re: SKU-1007 Glass Meal Prep Container — 44 days short, urgent.</span>
+        </li>
+        <li class="next-action-item">
+          <span class="action-num">3</span>
+          <span>Review <strong>SKU-1010 Holiday Gift Wrap Bundle</strong> against your seasonal calendar before marking down — may be intentional off-season carry.</span>
+        </li>
+        <li class="next-action-item">
+          <span class="action-num">4</span>
+          <span><strong>Re-run with corrected returns data</strong> — verify net of returns is correctly reflected in on-hand inventory figures.</span>
+        </li>
+        <li class="next-action-item">
+          <span class="action-num">5</span>
+          <span><strong>Export results or save this CSV</strong> — keep a copy for supplier conversations and reorder tracking.</span>
+        </li>
+      </ol>
+    </div>
+
+    <div class="summary-btns">
+      <button class="download-btn" onclick="showToast('Download available in the full tool.')">⬇ Download Results</button>
+      <button class="restart-btn" onclick="restartWizard()">↺ Start Over</button>
+    </div>
+
+    <div class="step-nav">
+      <button class="btn-prev" onclick="goToStep(4)">← Back</button>
+    </div>
+  </div>
+
+</div><!-- /wizard-container -->
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- Back to gallery -->
+<a class="back-link" href="../index.html">← Back to gallery</a>
+
+<script>
+  // ── State ──────────────────────────────────────────
+  let currentStep = 1;
+  const TOTAL_STEPS = 5;
+
+  // ── Draft content per SKU ─────────────────────────
+  const drafts = {
+    '1004': `Subject: Urgent Expedite Request — Cotton Drawer Organizer (SKU-1004)
+
+Hi Northstar Home team,
+
+We have a critical inventory situation and need to arrange emergency expedited shipping for Cotton Drawer Organizer (SKU-1004).
+
+Current situation:
+• On-hand: 6 units (2 available after 4 committed)
+• Days of cover: ~1 day
+• Standard lead time: 30 days
+• Projected days short: 29 days
+
+Request:
+• Quantity: 108 units
+
+Please confirm as soon as possible:
+1. Fastest possible ship date
+2. Expedited / air freight options and cost
+3. Whether a partial early shipment is available
+
+We risk stocking out within 24 hours. Thank you for urgent attention.
+
+[Your name]`,
+
+    '1001': `Subject: Urgent Expedite Request — Bamboo Storage Bin Small (SKU-1001)
+
+Hi Northstar Home team,
+
+We have an urgent inventory situation and need to arrange expedited shipping for Bamboo Storage Bin - Small (SKU-1001).
+
+Current situation:
+• Days of cover: ~10.7 days
+• Standard lead time: 30 days
+• Projected days short: 17 days
+
+Request:
+• Quantity: 144 units
+
+Please confirm as soon as possible:
+1. Fastest possible ship date
+2. Expedited shipping options and cost
+3. Whether a partial early shipment is available
+
+Without expediting, we project a stockout in approximately 11 days. Thank you.
+
+[Your name]`,
+
+    '1007': `Subject: Urgent Expedite Request — Glass Meal Prep Container 3pk (SKU-1007)
+
+Hi Blue Ridge Goods team,
+
+We have an urgent inventory situation and need to arrange expedited shipping for Glass Meal Prep Container 3pk (SKU-1007).
+
+Current situation:
+• Days of cover: ~16.4 days
+• Standard lead time: 30 days
+• Projected days short: 44 days
+
+Request:
+• Quantity: 18 units
+
+Please confirm as soon as possible:
+1. Fastest possible ship date
+2. Expedited shipping options and cost
+3. Whether a partial early shipment is available
+
+Thank you for your prompt attention.
+
+[Your name]`,
+
+    '1002': `Subject: Urgent Expedite Request — Bamboo Storage Bin Large (SKU-1002)
+
+Hi Northstar Home team,
+
+We have an urgent inventory situation and need to arrange expedited shipping for Bamboo Storage Bin - Large (SKU-1002).
+
+Current situation:
+• Days of cover: ~17.5 days
+• Standard lead time: 30 days
+• Projected days short: 18 days
+
+Request:
+• Quantity: 120 units
+
+Please confirm as soon as possible:
+1. Fastest possible ship date
+2. Expedited shipping options and cost
+3. Whether a partial early shipment is available
+
+Thank you for your urgent attention.
+
+[Your name]`
+  };
+
+  // ── Step navigation ────────────────────────────────
+  function goToStep(n) {
+    document.getElementById('step-' + currentStep).classList.remove('active');
+    currentStep = n;
+    document.getElementById('step-' + currentStep).classList.add('active');
+    updateProgress();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function updateProgress() {
+    const pct = (currentStep / TOTAL_STEPS) * 100;
+    document.getElementById('progressFill').style.width = pct + '%';
+
+    for (let i = 1; i <= TOTAL_STEPS; i++) {
+      const dot   = document.getElementById('dot-' + i);
+      const label = document.getElementById('label-' + i);
+      dot.classList.remove('active', 'done');
+      label.classList.remove('active', 'done');
+      if (i < currentStep) {
+        dot.classList.add('done');
+        dot.textContent = '✓';
+        label.classList.add('done');
+      } else if (i === currentStep) {
+        dot.classList.add('active');
+        dot.textContent = i;
+        label.classList.add('active');
+      } else {
+        dot.textContent = i;
+      }
+    }
+  }
+
+  function restartWizard() {
+    goToStep(1);
+  }
+
+  // ── Inline lead-time editing ───────────────────────
+  function editLeadTime(displayId, inputId) {
+    const display = document.getElementById(displayId);
+    const input   = document.getElementById(inputId);
+    display.style.display = 'none';
+    input.style.display   = 'inline-block';
+    input.focus();
+    input.select();
+  }
+
+  function saveLeadTime(displayId, inputId) {
+    const display = document.getElementById(displayId);
+    const input   = document.getElementById(inputId);
+    const val = parseInt(input.value) || 30;
+    input.value = val;
+    display.textContent = val + ' days';
+    input.style.display   = 'none';
+    display.style.display = '';
+  }
+
+  // ── Inline cover-days editing ──────────────────────
+  function editCover(el, inputId) {
+    const input = document.getElementById(inputId);
+    el.style.display    = 'none';
+    input.style.display = 'inline-block';
+    input.focus();
+    input.select();
+  }
+
+  function saveCover(input, coverId) {
+    const cover = document.getElementById(coverId);
+    const val = parseFloat(input.value) || 0;
+    input.value = val.toFixed(1);
+    cover.textContent = val.toFixed(1);
+    input.style.display = 'none';
+    cover.style.display = '';
+  }
+
+  // ── Supplier draft selector ────────────────────────
+  function selectSku(btn, sku) {
+    document.querySelectorAll('.sku-tab').forEach(t => t.classList.remove('selected'));
+    btn.classList.add('selected');
+    document.getElementById('draftTextarea').value = drafts[sku];
+  }
+
+  // Initialize draft on load
+  document.getElementById('draftTextarea').value = drafts['1004'];
+
+  // ── Copy draft ─────────────────────────────────────
+  function copyDraft() {
+    const text = document.getElementById('draftTextarea').value;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('copyBtn');
+        btn.classList.add('copied');
+        btn.innerHTML = '<span>✅</span> Copied!';
+        setTimeout(() => {
+          btn.classList.remove('copied');
+          btn.innerHTML = '<span>📋</span> Copy to clipboard';
+        }, 2000);
+      }).catch(() => fallbackCopy(text));
+    } else {
+      fallbackCopy(text);
+    }
+  }
+
+  function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch(e) {}
+    document.body.removeChild(ta);
+    showToast('Copied to clipboard.');
+  }
+
+  // ── Toast ──────────────────────────────────────────
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+</script>
+
+</body>
+</html>

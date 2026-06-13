@@ -1,0 +1,868 @@
+<!-- Option 3: Risk Cards -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inventory Stockout Risk Checker — Risk Cards</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #F8FAFC;
+      --card-bg: #ffffff;
+      --detail-bg: #F1F5F9;
+      --border: #E2E8F0;
+      --text: #0F172A;
+      --text-muted: #64748B;
+      --text-xs: #94A3B8;
+
+      --expedite: #EF4444;
+      --expedite-light: #FEF2F2;
+      --expedite-border: #FECACA;
+      --reorder: #F59E0B;
+      --reorder-light: #FFFBEB;
+      --hold: #94A3B8;
+      --hold-light: #F8FAFC;
+      --deadstock: #7C3AED;
+      --deadstock-light: #F5F3FF;
+      --deadstock-border: #DDD6FE;
+
+      --green: #22C55E;
+      --green-light: #F0FDF4;
+      --amber: #F59E0B;
+      --amber-light: #FFFBEB;
+
+      --radius: 10px;
+      --shadow: 0 1px 3px rgba(0,0,0,.07), 0 4px 12px rgba(0,0,0,.05);
+      --shadow-hover: 0 4px 12px rgba(0,0,0,.10), 0 8px 24px rgba(0,0,0,.08);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: 80px;
+    }
+
+    /* ── HEADER ─────────────────────────────────── */
+    .header {
+      background: #fff;
+      border-bottom: 1px solid var(--border);
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header-icon {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, #EF4444 0%, #7C3AED 100%);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .header-icon svg { width: 18px; height: 18px; fill: #fff; }
+    .header-title { font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: -.01em; }
+    .header-sub { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+
+    /* ── UPLOAD BAR ─────────────────────────────── */
+    .upload-bar {
+      background: #fff;
+      border-bottom: 1px solid var(--border);
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .upload-status {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; color: var(--text-muted);
+    }
+    .upload-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--green);
+      flex-shrink: 0;
+      box-shadow: 0 0 0 3px rgba(34,197,94,.15);
+    }
+    .upload-label { font-weight: 500; color: var(--text); }
+    .btn-upload {
+      font-size: 12px; font-weight: 600;
+      background: #fff; border: 1.5px solid var(--border);
+      color: var(--text-muted); border-radius: 7px;
+      padding: 6px 14px; cursor: pointer;
+      transition: border-color .15s, color .15s;
+      white-space: nowrap;
+    }
+    .btn-upload:hover { border-color: #94A3B8; color: var(--text); }
+
+    /* ── MAIN CONTENT ────────────────────────────── */
+    .container { max-width: 1160px; margin: 0 auto; padding: 0 16px; }
+
+    /* ── SUMMARY STRIP ───────────────────────────── */
+    .summary-strip {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      padding: 16px 0 0;
+    }
+    @media (min-width: 640px) {
+      .summary-strip { grid-template-columns: repeat(4, 1fr); }
+    }
+    .metric-box {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .metric-value {
+      font-size: 22px; font-weight: 800; letter-spacing: -.02em; line-height: 1;
+    }
+    .metric-label { font-size: 11px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+    .metric-box.expedite { border-top: 3px solid var(--expedite); }
+    .metric-box.expedite .metric-value { color: var(--expedite); }
+    .metric-box.deadstock { border-top: 3px solid var(--deadstock); }
+    .metric-box.deadstock .metric-value { color: var(--deadstock); }
+    .metric-box.cash { border-top: 3px solid var(--amber); }
+    .metric-box.cash .metric-value { color: var(--amber); }
+    .metric-box.total .metric-value { color: var(--text); }
+
+    /* ── ALERT BANNER ────────────────────────────── */
+    .alert-banner {
+      background: var(--amber-light);
+      border: 1px solid #FDE68A;
+      border-radius: var(--radius);
+      padding: 11px 16px;
+      margin: 14px 0 0;
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+    }
+    .alert-text {
+      display: flex; align-items: flex-start; gap: 10px;
+    }
+    .alert-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+    .alert-msg { font-size: 13px; font-weight: 500; color: #92400E; line-height: 1.45; }
+    .alert-dismiss {
+      background: none; border: none; cursor: pointer;
+      font-size: 16px; color: #B45309; padding: 0 4px; flex-shrink: 0;
+      line-height: 1;
+    }
+
+    /* ── DATA QUALITY ────────────────────────────── */
+    .dq-row {
+      margin: 10px 0 0;
+      font-size: 11.5px; color: var(--text-muted);
+      display: flex; align-items: center; flex-wrap: wrap; gap: 4px;
+    }
+    .dq-chip {
+      background: #EFF6FF;
+      border: 1px solid #BFDBFE;
+      color: #1D4ED8;
+      border-radius: 4px; padding: 2px 7px; font-size: 11px; font-weight: 500;
+    }
+    .dq-chip.missing { background: #FFF7ED; border-color: #FED7AA; color: #C2410C; }
+
+    /* ── SECTION LABEL ───────────────────────────── */
+    .section-label {
+      font-size: 13px; font-weight: 700;
+      color: var(--text); margin: 22px 0 10px;
+      display: flex; align-items: center; gap: 8px;
+      text-transform: uppercase; letter-spacing: .06em;
+    }
+    .section-label::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+
+    /* ── CARD GRID ────────────────────────────────── */
+    .card-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    @media (min-width: 1024px) {
+      .card-grid { grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    }
+
+    /* ── SKU CARD ─────────────────────────────────── */
+    .sku-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      cursor: pointer;
+      transition: box-shadow .18s, transform .18s;
+      position: relative;
+      overflow: hidden;
+      border-left: 4px solid var(--hold);
+    }
+    .sku-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
+    .sku-card.open { box-shadow: var(--shadow-hover); }
+    .sku-card[data-risk="EXPEDITE"] { border-left-color: var(--expedite); }
+    .sku-card[data-risk="REORDER"]  { border-left-color: var(--reorder); }
+    .sku-card[data-risk="HOLD"]     { border-left-color: var(--hold); }
+    .sku-card[data-risk="DEADSTOCK"]{ border-left-color: var(--deadstock); }
+
+    .card-inner { padding: 13px 14px 12px; }
+
+    .card-top {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 6px;
+      margin-bottom: 8px;
+    }
+    .card-sku { font-size: 10px; font-weight: 600; color: var(--text-muted); letter-spacing: .04em; }
+
+    .risk-badge {
+      font-size: 9.5px; font-weight: 700; letter-spacing: .05em;
+      padding: 3px 8px; border-radius: 20px; white-space: nowrap;
+      text-transform: uppercase; flex-shrink: 0;
+    }
+    .risk-badge.EXPEDITE { background: var(--expedite-light); color: var(--expedite); border: 1px solid var(--expedite-border); }
+    .risk-badge.REORDER  { background: var(--reorder-light); color: #B45309; border: 1px solid #FDE68A; }
+    .risk-badge.HOLD     { background: var(--hold-light); color: #475569; border: 1px solid #CBD5E1; }
+    .risk-badge.DEADSTOCK{ background: var(--deadstock-light); color: var(--deadstock); border: 1px solid var(--deadstock-border); }
+
+    .card-name {
+      font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.35;
+      margin-bottom: 10px;
+    }
+
+    .card-days {
+      font-size: 26px; font-weight: 900; letter-spacing: -.03em; line-height: 1;
+      margin-bottom: 2px;
+    }
+    .card-days.danger { color: var(--expedite); }
+    .card-days.safe   { color: var(--text); }
+    .card-days.dead   { color: var(--deadstock); }
+    .card-days.no-sales { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .card-days-label {
+      font-size: 10px; font-weight: 500; color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .card-action {
+      font-size: 11px; font-weight: 600; padding: 4px 0 0;
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 4px;
+    }
+    .action-text.expedite { color: var(--expedite); }
+    .action-text.hold     { color: var(--green); }
+    .action-text.deadstock{ color: var(--deadstock); }
+
+    .card-short { font-size: 10.5px; font-weight: 700; color: var(--expedite); margin-bottom: 6px; }
+    .card-cash  { font-size: 10.5px; font-weight: 600; color: var(--deadstock); margin-bottom: 4px; }
+    .card-offseason {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 9.5px; font-weight: 600; color: #B45309;
+      background: var(--amber-light); border: 1px solid #FDE68A;
+      border-radius: 4px; padding: 2px 7px; margin-bottom: 6px;
+    }
+
+    .expand-icon {
+      font-size: 11px; color: var(--text-muted);
+      transition: transform .2s;
+      flex-shrink: 0;
+    }
+    .sku-card.open .expand-icon { transform: rotate(180deg); }
+
+    /* ── DETAIL PANEL ─────────────────────────────── */
+    .detail-panel {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height .32s cubic-bezier(.4,0,.2,1);
+    }
+    .detail-panel.open { max-height: 900px; }
+    .detail-inner {
+      background: var(--detail-bg);
+      border-top: 1px solid var(--border);
+      padding: 16px 16px 18px;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    @media (min-width: 640px) {
+      .detail-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    .dg-item { }
+    .dg-label {
+      font-size: 10px; font-weight: 600; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: 3px;
+    }
+    .dg-value {
+      font-size: 15px; font-weight: 700; color: var(--text);
+    }
+    .dg-value.danger { color: var(--expedite); }
+    .dg-value.dead   { color: var(--deadstock); }
+
+    .lead-edit {
+      font-size: 15px; font-weight: 700; color: var(--text);
+      border: none; border-bottom: 1.5px dashed #CBD5E1;
+      background: transparent; width: 60px;
+      padding: 0 2px; outline: none; cursor: text;
+    }
+    .lead-edit:focus { border-bottom-color: #6366F1; }
+    .lead-unit { font-size: 12px; color: var(--text-muted); font-weight: 500; margin-left: 2px; }
+
+    /* supplier draft */
+    .draft-box {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .draft-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      background: #FAFAFA;
+    }
+    .draft-header-left {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .draft-tag {
+      font-size: 9.5px; font-weight: 700; letter-spacing: .06em;
+      background: #FEF2F2; color: var(--expedite);
+      border: 1px solid var(--expedite-border); border-radius: 4px;
+      padding: 2px 8px;
+    }
+    .draft-title { font-size: 12px; font-weight: 600; color: var(--text); }
+    .draft-switch {
+      font-size: 11px; color: #6366F1; cursor: pointer;
+      background: none; border: none; padding: 0;
+      text-decoration: underline;
+    }
+    .draft-body {
+      padding: 12px 14px;
+      font-size: 12px; line-height: 1.65; color: #374151;
+      font-family: 'Courier New', monospace;
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .draft-footer {
+      padding: 10px 14px;
+      border-top: 1px solid var(--border);
+      display: flex; justify-content: flex-end;
+    }
+    .btn-copy {
+      font-size: 12px; font-weight: 600;
+      background: var(--expedite); color: #fff;
+      border: none; border-radius: 7px;
+      padding: 7px 16px; cursor: pointer;
+      transition: opacity .15s;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .btn-copy:hover { opacity: .88; }
+    .btn-copy.copied { background: var(--green); }
+
+    .detail-rec {
+      font-size: 12.5px; color: #374151; line-height: 1.55;
+      margin-bottom: 10px;
+    }
+    .detail-rec strong { color: var(--text); }
+
+    .detail-divider {
+      height: 1px; background: var(--border); margin: 12px 0;
+    }
+
+    /* ── FORMULA ACCORDION ─────────────────────────── */
+    .formula-section {
+      margin: 28px 0 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: #fff;
+      overflow: hidden;
+    }
+    .formula-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; cursor: pointer;
+      user-select: none;
+    }
+    .formula-header:hover { background: #FAFAFA; }
+    .formula-header-left {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 13px; font-weight: 600; color: var(--text);
+    }
+    .formula-header-icon { font-size: 15px; }
+    .formula-caret {
+      font-size: 12px; color: var(--text-muted);
+      transition: transform .2s;
+    }
+    .formula-section.open .formula-caret { transform: rotate(180deg); }
+    .formula-body {
+      max-height: 0; overflow: hidden;
+      transition: max-height .3s cubic-bezier(.4,0,.2,1);
+    }
+    .formula-section.open .formula-body { max-height: 600px; }
+    .formula-inner {
+      padding: 0 18px 18px;
+      border-top: 1px solid var(--border);
+    }
+    .formula-group { margin-top: 16px; }
+    .formula-group-title {
+      font-size: 11px; font-weight: 700; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px;
+    }
+    .formula-item {
+      font-size: 12px; color: #374151; line-height: 1.6;
+      display: flex; gap: 8px; margin-bottom: 4px;
+    }
+    .formula-item code {
+      font-family: 'Courier New', monospace; font-size: 11.5px;
+      background: #F1F5F9; border: 1px solid var(--border);
+      border-radius: 4px; padding: 0 5px;
+      color: #4338CA; white-space: nowrap;
+    }
+
+    /* ── FOOTER BACK LINK ─────────────────────────── */
+    .back-link {
+      position: fixed; bottom: 20px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15,23,42,.85);
+      backdrop-filter: blur(10px);
+      color: #fff; text-decoration: none;
+      font-size: 12px; font-weight: 600;
+      padding: 9px 20px; border-radius: 24px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.2);
+      transition: opacity .15s;
+      white-space: nowrap; z-index: 200;
+    }
+    .back-link:hover { opacity: .85; }
+
+    /* ── SCROLLABLE GRID WRAPPER ──────────────────── */
+    .cards-wrapper { padding-bottom: 8px; }
+
+    /* Expand card spans full width on mobile when open */
+    .detail-panel-outer {
+      grid-column: 1 / -1;
+    }
+
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-brand">
+      <div class="header-icon">
+        <svg viewBox="0 0 24 24"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0 0h18"/></svg>
+      </div>
+      <div>
+        <div class="header-title">Stockout Risk Checker</div>
+        <div class="header-sub">Inventory intelligence for SMBs</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- UPLOAD BAR -->
+  <div class="upload-bar">
+    <div class="upload-status">
+      <div class="upload-dot"></div>
+      <span class="upload-label">Sample data loaded</span>
+      <span>— 10 SKUs</span>
+    </div>
+    <button class="btn-upload">⬆ Upload CSV</button>
+  </div>
+
+  <div class="container">
+
+    <!-- SUMMARY STRIP -->
+    <div class="summary-strip">
+      <div class="metric-box total">
+        <div class="metric-value">10</div>
+        <div class="metric-label">SKUs Analyzed</div>
+      </div>
+      <div class="metric-box expedite">
+        <div class="metric-value">4</div>
+        <div class="metric-label">Expedite Now</div>
+      </div>
+      <div class="metric-box deadstock">
+        <div class="metric-value">2</div>
+        <div class="metric-label">Deadstock</div>
+      </div>
+      <div class="metric-box cash">
+        <div class="metric-value">$2,296</div>
+        <div class="metric-label">Cash Tied Up</div>
+      </div>
+    </div>
+
+    <!-- ALERT BANNER -->
+    <div class="alert-banner" id="alertBanner">
+      <div class="alert-text">
+        <span class="alert-icon">⚠️</span>
+        <span class="alert-msg">Verify net of returns — available units have not been reconciled against pending customer returns or RMAs. Review before placing orders.</span>
+      </div>
+      <button class="alert-dismiss" onclick="document.getElementById('alertBanner').style.display='none'" title="Dismiss">✕</button>
+    </div>
+
+    <!-- DATA QUALITY NOTICE -->
+    <div class="dq-row">
+      <span style="font-weight:600; color:#475569;">Using:</span>
+      <span class="dq-chip">unit_cost</span>
+      <span class="dq-chip">vendor</span>
+      <span class="dq-chip">committed_units</span>
+      <span class="dq-chip">incoming_units</span>
+      &nbsp;|&nbsp;
+      <span style="font-weight:600; color:#475569;">Missing:</span>
+      <span class="dq-chip missing">category</span>
+    </div>
+
+    <!-- SECTION LABEL -->
+    <div class="section-label">Action required this week</div>
+
+    <!-- CARD GRID -->
+    <div class="card-grid cards-wrapper" id="cardGrid"></div>
+
+    <!-- FORMULA ACCORDION -->
+    <div class="formula-section" id="formulaSection">
+      <div class="formula-header" onclick="toggleFormula()">
+        <div class="formula-header-left">
+          <span class="formula-header-icon">🧮</span>
+          How these numbers are calculated
+        </div>
+        <span class="formula-caret">▼</span>
+      </div>
+      <div class="formula-body">
+        <div class="formula-inner">
+          <div class="formula-group">
+            <div class="formula-group-title">Days of Cover</div>
+            <div class="formula-item"><code>available_units ÷ avg_daily_sales</code> — how many days of stock remain at current run rate</div>
+          </div>
+          <div class="formula-group">
+            <div class="formula-group-title">Risk Classification</div>
+            <div class="formula-item"><code>EXPEDITE</code> — days_cover &lt; lead_time (stockout before reorder arrives)</div>
+            <div class="formula-item"><code>REORDER</code> — days_cover between lead_time and 2× lead_time</div>
+            <div class="formula-item"><code>HOLD</code> — days_cover &gt; 2× lead_time; no urgent action needed</div>
+            <div class="formula-item"><code>DEADSTOCK</code> — days_cover &gt; 180 days (very slow / no movement)</div>
+          </div>
+          <div class="formula-group">
+            <div class="formula-group-title">Projected Days Short</div>
+            <div class="formula-item"><code>lead_time − days_cover</code> — estimated days you'll be out of stock before new inventory lands</div>
+          </div>
+          <div class="formula-group">
+            <div class="formula-group-title">Reorder Quantity</div>
+            <div class="formula-item">Based on 90-day forward demand coverage at current velocity, minus incoming units already ordered.</div>
+          </div>
+          <div class="formula-group">
+            <div class="formula-group-title">Cash Tied Up</div>
+            <div class="formula-item"><code>on_hand_units × unit_cost</code> — capital locked in slow-moving inventory</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- BACK LINK -->
+  <a class="back-link" href="../index.html">← Back to gallery</a>
+
+  <script>
+    const skuData = [
+      { sku: 'SKU-1004', name: 'Cotton Drawer Organizer', risk: 'EXPEDITE', days_cover: 1.2, lead_time: 30, action: 'Expedite', vendor: 'Northstar Home', on_hand: 6, available: 2, incoming: 0, reorder_qty: 108, reorder_cash: 513, projected_short: 29, unit_cost: 4.75 },
+      { sku: 'SKU-1001', name: 'Bamboo Storage Bin - Small', risk: 'EXPEDITE', days_cover: 10.7, lead_time: 28, action: 'Expedite', vendor: 'Northstar Home', on_hand: 42, available: 32, committed: 10, incoming: 0, reorder_qty: 144, reorder_cash: 1224, projected_short: 17, unit_cost: 8.50 },
+      { sku: 'SKU-1007', name: 'Glass Meal Prep Container 3pk', risk: 'EXPEDITE', days_cover: 16.4, lead_time: 60, action: 'Expedite', vendor: 'Blue Ridge Goods', on_hand: 12, available: 4, committed: 8, incoming: 0, reorder_qty: 18, reorder_cash: 194, projected_short: 44, unit_cost: 10.80 },
+      { sku: 'SKU-1002', name: 'Bamboo Storage Bin - Large', risk: 'EXPEDITE', days_cover: 17.5, lead_time: 35, action: 'Expedite', vendor: 'Northstar Home', on_hand: 18, available: 18, incoming: 24, reorder_qty: 120, reorder_cash: 1470, projected_short: 18, unit_cost: 12.25 },
+      { sku: 'SKU-1008', name: 'Linen Closet Divider', risk: 'HOLD', days_cover: 48, lead_time: 28, action: 'Hold', vendor: 'Northstar Home', on_hand: 0, available: 0, incoming: 40 },
+      { sku: 'SKU-1006', name: 'Magnetic Spice Labels', risk: 'HOLD', days_cover: 83.3, lead_time: 14, action: 'Hold', vendor: 'LabelWorks', on_hand: 88, available: 88, incoming: 0 },
+      { sku: 'SKU-1009', name: 'Compostable Shipping Mailer 50pk', risk: 'HOLD', days_cover: 95, lead_time: 20, action: 'Hold', vendor: 'PackRight', on_hand: 500, available: 475, committed: 25, incoming: 0 },
+      { sku: 'SKU-1005', name: 'Reusable Produce Bag Set', risk: 'HOLD', days_cover: null, lead_time: 45, action: 'Hold — No recent sales', vendor: 'Greenline Supply', on_hand: 310, available: 310, incoming: 0, cash_tied: 682 },
+      { sku: 'SKU-1003', name: 'Silicone Travel Bottle Set', risk: 'DEADSTOCK', days_cover: 587.5, lead_time: 21, action: 'Deadstock candidate', vendor: 'Blue Ridge Goods', on_hand: 240, available: 235, committed: 5, incoming: 0, cash_tied: 744, unit_cost: 3.10 },
+      { sku: 'SKU-1010', name: 'Holiday Gift Wrap Bundle', risk: 'DEADSTOCK', days_cover: 1791, lead_time: 50, action: 'Deadstock candidate', vendor: 'Seasonal House', on_hand: 120, available: 120, incoming: 0, cash_tied: 870, unit_cost: 7.25, off_season: true }
+    ];
+
+    // Sort: EXPEDITE → HOLD → DEADSTOCK
+    const riskOrder = { EXPEDITE: 0, REORDER: 1, HOLD: 2, DEADSTOCK: 3 };
+    const sorted = [...skuData].sort((a, b) => riskOrder[a.risk] - riskOrder[b.risk]);
+
+    let openCard = null; // tracks which SKU is open
+
+    function fmt(n) {
+      if (n == null) return '—';
+      return Number.isInteger(n) ? n.toLocaleString() : n.toFixed(1);
+    }
+    function fmtCash(n) {
+      if (n == null) return '—';
+      return '$' + n.toLocaleString();
+    }
+
+    function buildDraftText(d) {
+      const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      return `Subject: URGENT — Expedite Request for ${d.name} (${d.sku})
+
+Hi ${d.vendor} Team,
+
+We are critically low on ${d.name} (${d.sku}), with only ${fmt(d.days_cover)} days of cover remaining and a ${d.lead_time}-day lead time. We are projected to stock out for approximately ${d.projected_short} days without urgent action.
+
+We need to expedite a reorder of ${d.reorder_qty} units as quickly as possible.
+
+Est. order value: ${fmtCash(d.reorder_cash)}
+
+Please confirm earliest ship date and any express options.
+
+Thank you,
+[Your name]
+Dock to AI — ${today}`;
+    }
+
+    function buildDetailHTML(d) {
+      if (d.risk === 'EXPEDITE') {
+        const draft = buildDraftText(d);
+        const escaped = draft.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return `
+          <div class="detail-inner">
+            <div class="detail-grid">
+              <div class="dg-item">
+                <div class="dg-label">On Hand</div>
+                <div class="dg-value">${fmt(d.on_hand)}</div>
+              </div>
+              <div class="dg-item">
+                <div class="dg-label">Available</div>
+                <div class="dg-value danger">${fmt(d.available)}</div>
+              </div>
+              <div class="dg-item">
+                <div class="dg-label">Incoming</div>
+                <div class="dg-value">${fmt(d.incoming)}</div>
+              </div>
+              <div class="dg-item">
+                <div class="dg-label">Days Cover</div>
+                <div class="dg-value danger">${fmt(d.days_cover)}</div>
+              </div>
+              <div class="dg-item">
+                <div class="dg-label">Lead Time</div>
+                <div class="dg-value">
+                  <input class="lead-edit" type="number" value="${d.lead_time}" min="1" max="365" title="Edit lead time"
+                    onclick="event.stopPropagation()" />
+                  <span class="lead-unit">days</span>
+                </div>
+              </div>
+              <div class="dg-item">
+                <div class="dg-label">Proj. Short</div>
+                <div class="dg-value danger">${fmt(d.projected_short)} days</div>
+              </div>
+              <div class="dg-item">
+                <div class="dg-label">Reorder Qty</div>
+                <div class="dg-value">${fmt(d.reorder_qty)} units</div>
+              </div>
+              <div class="dg-item">
+                <div class="dg-label">Est. Cash Needed</div>
+                <div class="dg-value">${fmtCash(d.reorder_cash)}</div>
+              </div>
+              ${d.committed ? `<div class="dg-item"><div class="dg-label">Committed</div><div class="dg-value">${fmt(d.committed)}</div></div>` : ''}
+            </div>
+            <div class="detail-divider"></div>
+            <div class="draft-box">
+              <div class="draft-header">
+                <div class="draft-header-left">
+                  <span class="draft-tag">URGENT EXPEDITE</span>
+                  <span class="draft-title">Supplier email draft — ${d.vendor}</span>
+                </div>
+                <button class="draft-switch" onclick="event.stopPropagation()">Switch to standard</button>
+              </div>
+              <div class="draft-body" id="draft-${d.sku}">${escaped}</div>
+              <div class="draft-footer">
+                <button class="btn-copy" onclick="event.stopPropagation(); copyDraft('${d.sku}', this)">
+                  📋 Copy to Clipboard
+                </button>
+              </div>
+            </div>
+          </div>`;
+      }
+
+      if (d.risk === 'DEADSTOCK') {
+        return `
+          <div class="detail-inner">
+            <div class="detail-grid">
+              <div class="dg-item">
+                <div class="dg-label">On Hand</div>
+                <div class="dg-value">${fmt(d.on_hand)}</div>
+              </div>
+              <div class="dg-item">
+                <div class="dg-label">Available</div>
+                <div class="dg-value">${fmt(d.available)}</div>
+              </div>
+              <div class="dg-item">
+                <div class="dg-label">Days Cover</div>
+                <div class="dg-value dead">${fmt(d.days_cover)} days</div>
+              </div>
+              <div class="dg-item">
+                <div class="dg-label">Cash Tied Up</div>
+                <div class="dg-value dead">${fmtCash(d.cash_tied)}</div>
+              </div>
+              <div class="dg-item">
+                <div class="dg-label">Unit Cost</div>
+                <div class="dg-value">${d.unit_cost ? '$' + d.unit_cost.toFixed(2) : '—'}</div>
+              </div>
+              <div class="dg-item">
+                <div class="dg-label">Lead Time</div>
+                <div class="dg-value">
+                  <input class="lead-edit" type="number" value="${d.lead_time}" min="1" max="365" title="Edit lead time"
+                    onclick="event.stopPropagation()" />
+                  <span class="lead-unit">days</span>
+                </div>
+              </div>
+            </div>
+            <div class="detail-divider"></div>
+            <div class="detail-rec">
+              <strong>Recommendation:</strong> Review sales velocity before marking down. ${fmtCash(d.cash_tied)} is tied up in capital that could be redeployed.
+              ${d.off_season ? '<br><br><strong>Note:</strong> This SKU is seasonal (Holiday Gift Wrap). Sales will resume Q4. Confirm whether this is true deadstock or seasonal — consider a clearance bundle if you need to free up warehouse space now.' : ''}
+            </div>
+          </div>`;
+      }
+
+      // HOLD
+      return `
+        <div class="detail-inner">
+          <div class="detail-grid">
+            <div class="dg-item">
+              <div class="dg-label">On Hand</div>
+              <div class="dg-value">${fmt(d.on_hand)}</div>
+            </div>
+            <div class="dg-item">
+              <div class="dg-label">Available</div>
+              <div class="dg-value">${fmt(d.available)}</div>
+            </div>
+            <div class="dg-item">
+              <div class="dg-label">Incoming</div>
+              <div class="dg-value">${fmt(d.incoming)}</div>
+            </div>
+            ${d.committed != null ? `<div class="dg-item"><div class="dg-label">Committed</div><div class="dg-value">${fmt(d.committed)}</div></div>` : ''}
+            <div class="dg-item">
+              <div class="dg-label">Days Cover</div>
+              <div class="dg-value">${d.days_cover != null ? fmt(d.days_cover) + ' days' : 'No recent sales'}</div>
+            </div>
+            <div class="dg-item">
+              <div class="dg-label">Lead Time</div>
+              <div class="dg-value">
+                <input class="lead-edit" type="number" value="${d.lead_time}" min="1" max="365" title="Edit lead time"
+                  onclick="event.stopPropagation()" />
+                <span class="lead-unit">days</span>
+              </div>
+            </div>
+            ${d.cash_tied != null ? `<div class="dg-item"><div class="dg-label">Cash Tied Up</div><div class="dg-value">${fmtCash(d.cash_tied)}</div></div>` : ''}
+          </div>
+          <div class="detail-rec" style="color:#15803D; font-weight:600; font-size:12.5px;">
+            ✓ No action needed. Stock levels are sufficient relative to lead time.
+            ${d.days_cover == null ? ' No recent sales detected — monitor demand before reordering.' : ''}
+          </div>
+        </div>`;
+    }
+
+    function buildCard(d, idx) {
+      const riskClass = d.risk;
+      let daysHTML = '';
+      if (d.days_cover == null) {
+        daysHTML = `<div class="card-days no-sales">No sales</div>`;
+      } else {
+        const cls = d.risk === 'EXPEDITE' ? 'danger' : d.risk === 'DEADSTOCK' ? 'dead' : 'safe';
+        daysHTML = `<div class="card-days ${cls}">${fmt(d.days_cover)}</div>`;
+      }
+
+      let extraHTML = '';
+      if (d.risk === 'EXPEDITE' && d.projected_short) {
+        extraHTML += `<div class="card-short">⚡ ${d.projected_short} days short</div>`;
+      }
+      if (d.risk === 'DEADSTOCK' && d.cash_tied) {
+        extraHTML += `<div class="card-cash">💰 Cash tied: ${fmtCash(d.cash_tied)}</div>`;
+        if (d.off_season) {
+          extraHTML += `<div class="card-offseason">🎄 Off-season</div>`;
+        }
+      }
+
+      const actionCls = d.risk === 'EXPEDITE' ? 'expedite' : d.risk === 'HOLD' ? 'hold' : 'deadstock';
+      const actionText = d.risk === 'HOLD'
+        ? (d.days_cover == null ? '✓ No recent sales' : '✓ Stable')
+        : d.action;
+
+      return `
+        <div class="sku-card" data-risk="${riskClass}" data-sku="${d.sku}" onclick="toggleCard('${d.sku}')">
+          <div class="card-inner">
+            <div class="card-top">
+              <div class="card-sku">${d.sku}</div>
+              <span class="risk-badge ${riskClass}">${d.risk}</span>
+            </div>
+            <div class="card-name">${d.name}</div>
+            ${extraHTML}
+            ${daysHTML}
+            <div class="card-days-label">days of cover</div>
+            <div class="card-action">
+              <span class="action-text ${actionCls}">${actionText}</span>
+              <span class="expand-icon">▼</span>
+            </div>
+          </div>
+          <div class="detail-panel" id="panel-${d.sku}">
+            ${buildDetailHTML(d)}
+          </div>
+        </div>`;
+    }
+
+    function renderCards() {
+      const grid = document.getElementById('cardGrid');
+      grid.innerHTML = sorted.map((d, i) => buildCard(d, i)).join('');
+    }
+
+    function toggleCard(sku) {
+      const card = document.querySelector(`[data-sku="${sku}"]`);
+      const panel = document.getElementById(`panel-${sku}`);
+      const isOpen = card.classList.contains('open');
+
+      // Close any open card first
+      document.querySelectorAll('.sku-card.open').forEach(c => {
+        c.classList.remove('open');
+        document.getElementById(`panel-${c.dataset.sku}`).classList.remove('open');
+      });
+
+      if (!isOpen) {
+        card.classList.add('open');
+        panel.classList.add('open');
+        // Scroll card into view on mobile after animation
+        setTimeout(() => {
+          card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 100);
+      }
+    }
+
+    function copyDraft(sku, btn) {
+      const el = document.getElementById(`draft-${sku}`);
+      if (!el) return;
+      const text = el.innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        btn.classList.add('copied');
+        btn.textContent = '✓ Copied!';
+        setTimeout(() => {
+          btn.classList.remove('copied');
+          btn.innerHTML = '📋 Copy to Clipboard';
+        }, 2200);
+      }).catch(() => {
+        // fallback
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        btn.classList.add('copied');
+        btn.textContent = '✓ Copied!';
+        setTimeout(() => {
+          btn.classList.remove('copied');
+          btn.innerHTML = '📋 Copy to Clipboard';
+        }, 2200);
+      });
+    }
+
+    function toggleFormula() {
+      document.getElementById('formulaSection').classList.toggle('open');
+    }
+
+    renderCards();
+  </script>
+</body>
+</html>

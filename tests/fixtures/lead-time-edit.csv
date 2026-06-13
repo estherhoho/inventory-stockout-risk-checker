@@ -1,0 +1,2 @@
+sku,product_name,inventory_on_hand,units_sold_30d,units_sold_90d,lead_time_days,unit_cost,vendor,reorder_multiple,committed_units
+SKU-EDIT,Lead Time Test Item,50,60,120,20,5,Edit Supplier,10,0

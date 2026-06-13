@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Inventory Stockout Risk Checker</title>
+    <meta name="description" content="Upload an inventory CSV and see stockout risk, deadstock candidates, reorder quantities, and the cash on the line — computed locally in your browser, nothing uploaded.">
+    <link rel="icon" href="data:,">
+    <script>
+      /* No-flash theme bootstrap: runs before the stylesheet paints.
+         Priority: ?theme=light|dark  →  localStorage(docktoai_theme)  →  light. */
+      (function bootstrapTheme() {
+        function valid(value) { return value === "light" || value === "dark"; }
+        var theme = "light";
+        try {
+          var query = new URLSearchParams(window.location.search).get("theme");
+          if (valid(query)) theme = query;
+          else {
+            var saved = localStorage.getItem("docktoai_theme");
+            if (valid(saved)) theme = saved;
+          }
+        } catch (error) { /* private mode / no URL API — fall back to light */ }
+        document.documentElement.setAttribute("data-theme", theme);
+      })();
+    </script>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <!-- ============ 1 · HEADER ============ -->
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="logo" aria-hidden="true">D</div>
+        <div class="titles">
+          <h1>Inventory Stockout Risk Checker</h1>
+          <span class="sub" data-header-sub>Weekly stockout &amp; deadstock review</span>
+        </div>
+        <div class="topbar-actions">
+          <button class="btn-icon" type="button" data-theme-toggle aria-label="Toggle light or dark theme" title="Toggle theme"></button>
+          <button class="btn-ghost" type="button" data-sample-button>Try sample</button>
+          <label class="btn-primary">
+            <span>Upload CSV</span>
+            <input class="visually-hidden" type="file" accept=".csv,text/csv" data-file-input>
+          </label>
+        </div>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <!-- validation errors -->
+      <section class="error-panel" data-error-panel hidden aria-live="polite"></section>
+
+      <!-- ============ EMPTY STATE ============ -->
+      <section class="empty-state" data-empty-state>
+        <span class="eyebrow">Browser-local CSV analyzer</span>
+        <h2>See what to reorder, expedite, hold, or mark down — this week.</h2>
+        <p>Upload a normalized inventory CSV and get a chart-led weekly action review: stockout runway, deadstock cash, reorder spend, and the top SKUs to act on. Nothing leaves your browser.</p>
+        <div class="empty-actions">
+          <button class="btn-primary" type="button" data-sample-button>Try sample CSV</button>
+          <label class="btn-ghost">
+            <span>Upload CSV</span>
+            <input class="visually-hidden" type="file" accept=".csv,text/csv" data-file-input>
+          </label>
+        </div>
+        <p class="empty-schema">Required columns: <code>sku</code>, <code>product_name</code>, <code>inventory_on_hand</code>, <code>units_sold_30d</code>, <code>units_sold_90d</code>, <code>lead_time_days</code>. Optional: <code>unit_cost</code>, <code>vendor</code>, <code>category</code>, <code>reorder_multiple</code>, <code>incoming_units</code>, <code>committed_units</code>.</p>
+      </section>
+
+      <!-- ============ DASHBOARD (built by JS from state.rows) ============ -->
+      <div class="dashboard" data-dashboard hidden></div>
+    </main>
+
+    <!-- shared tooltip for the bubble chart -->
+    <div id="tooltip" role="status" aria-live="polite"></div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,85 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+  *{margin:0}html,body{width:1200px;height:660px;overflow:hidden;background:#1b1838}
+</style></head><body>
+<svg width="1200" height="660" viewBox="0 0 1200 660" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1a1736"/>
+      <stop offset="0.55" stop-color="#1f1b40"/>
+      <stop offset="1" stop-color="#241d4a"/>
+    </linearGradient>
+    <radialGradient id="blobV" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#7c5cff" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#7c5cff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="blobT" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#22d3ee" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="7" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="b"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="660" fill="url(#bg)"/>
+  <ellipse cx="300" cy="150" rx="360" ry="300" fill="url(#blobV)"/>
+  <ellipse cx="940" cy="560" rx="360" ry="300" fill="url(#blobT)"/>
+
+  <!-- faint grid -->
+  <g stroke="#8c84d2" stroke-opacity="0.07" stroke-width="1">
+    <line x1="120" y1="40" x2="120" y2="620"/><line x1="240" y1="40" x2="240" y2="620"/>
+    <line x1="360" y1="40" x2="360" y2="620"/><line x1="480" y1="40" x2="480" y2="620"/>
+    <line x1="600" y1="40" x2="600" y2="620"/><line x1="720" y1="40" x2="720" y2="620"/>
+    <line x1="840" y1="40" x2="840" y2="620"/><line x1="960" y1="40" x2="960" y2="620"/>
+    <line x1="1080" y1="40" x2="1080" y2="620"/>
+    <line x1="80" y1="120" x2="1120" y2="120"/><line x1="80" y1="240" x2="1120" y2="240"/>
+    <line x1="80" y1="360" x2="1120" y2="360"/><line x1="80" y1="480" x2="1120" y2="480"/>
+  </g>
+
+  <!-- baseline -->
+  <line x1="270" y1="540" x2="900" y2="540" stroke="#9a8ff0" stroke-opacity="0.35" stroke-width="2"/>
+
+  <!-- bars: glow layer then crisp layer -->
+  <g id="bars">
+    <rect x="300" y="330" width="46" height="210" rx="6" fill="#34d399"/>
+    <rect x="366" y="364" width="46" height="176" rx="6" fill="#22d3ee"/>
+    <rect x="432" y="344" width="46" height="196" rx="6" fill="#34d399"/>
+    <rect x="498" y="390" width="46" height="150" rx="6" fill="#60a5fa"/>
+    <rect x="564" y="412" width="46" height="128" rx="6" fill="#a78bfa"/>
+    <rect x="630" y="390" width="46" height="150" rx="6" fill="#fbbf24"/>
+    <rect x="696" y="448" width="46" height="92"  rx="6" fill="#fbbf24"/>
+    <rect x="762" y="470" width="46" height="70"  rx="6" fill="#fb5d6a"/>
+    <rect x="828" y="496" width="46" height="44"  rx="6" fill="#fb5d6a"/>
+  </g>
+  <use href="#bars" filter="url(#glow)" opacity="0.85"/>
+  <use href="#bars"/>
+
+  <!-- dashed reorder threshold -->
+  <g>
+    <line id="thr" x1="276" y1="446" x2="900" y2="446" stroke="#fbbf24" stroke-width="2.5" stroke-dasharray="10 9" stroke-linecap="round"/>
+    <use href="#thr" filter="url(#glow)" opacity="0.7"/>
+    <line x1="276" y1="446" x2="900" y2="446" stroke="#fbbf24" stroke-width="2.5" stroke-dasharray="10 9" stroke-linecap="round"/>
+  </g>
+
+  <!-- descending trend line through bar tops -->
+  <g>
+    <polyline id="trend" points="323,330 389,364 455,344 521,390 587,412 653,390 719,448 785,470 851,496"
+      fill="none" stroke="#e7ecff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <use href="#trend" filter="url(#glow)" opacity="0.7" stroke="#22d3ee"/>
+    <polyline points="323,330 389,364 455,344 521,390 587,412 653,390 719,448 785,470 851,496"
+      fill="none" stroke="#e7ecff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- glowing end dots -->
+  <g>
+    <circle cx="323" cy="330" r="6" fill="#34d399"/>
+    <circle cx="851" cy="496" r="7" fill="#fb5d6a"/>
+    <use href="#trend" x="0"/>
+  </g>
+  <circle cx="323" cy="330" r="11" fill="#34d399" opacity="0.5" filter="url(#glow)"/>
+  <circle cx="851" cy="496" r="12" fill="#fb5d6a" opacity="0.6" filter="url(#glow)"/>
+  <circle cx="323" cy="330" r="5.5" fill="#d6fff0"/>
+  <circle cx="851" cy="496" r="6" fill="#ffe2e6"/>
+</svg>
+</body></html>

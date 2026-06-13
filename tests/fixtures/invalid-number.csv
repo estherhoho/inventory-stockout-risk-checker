@@ -1,0 +1,2 @@
+sku,product_name,inventory_on_hand,units_sold_30d,units_sold_90d,lead_time_days
+SKU-BAD,Bad Numeric,20,not-a-number,25,21

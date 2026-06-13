@@ -1,0 +1,11 @@
+sku,product_name,inventory_on_hand,units_sold_30d,units_sold_90d,lead_time_days,unit_cost,vendor,category,reorder_multiple,incoming_units,committed_units
+SKU-1001,Bamboo Storage Bin - Small,42,90,260,28,8.50,Northstar Home,Storage,12,0,10
+SKU-1002,Bamboo Storage Bin - Large,18,72,210,35,12.25,Northstar Home,Storage,12,24,0
+SKU-1003,Silicone Travel Bottle Set,240,12,35,21,3.10,Blue Ridge Goods,Travel,24,0,5
+SKU-1004,Cotton Drawer Organizer,6,48,150,30,4.75,Northstar Home,Storage,12,0,4
+SKU-1005,Reusable Produce Bag Set,310,0,0,45,2.20,Greenline Supply,Kitchen,50,0,0
+SKU-1006,Magnetic Spice Labels,88,30,95,14,1.40,LabelWorks,Kitchen,20,0,0
+SKU-1007,Glass Meal Prep Container 3pk,12,6,22,60,10.80,Blue Ridge Goods,Kitchen,6,0,8
+SKU-1008,Linen Closet Divider,0,25,70,28,5.90,Northstar Home,Storage,10,40,0
+SKU-1009,Compostable Shipping Mailer 50pk,500,150,420,20,6.30,PackRight,Shipping,25,0,25
+SKU-1010,Holiday Gift Wrap Bundle,120,0,6,50,7.25,Seasonal House,Seasonal,12,0,0

@@ -1,0 +1,862 @@
+<!-- Option 2: Command Table -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Command Table — Inventory Stockout Risk Checker</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #F1F5F9;
+      --surface: #ffffff;
+      --th-bg: #1E293B;
+      --th-text: #ffffff;
+      --row-hover: #F8FAFC;
+      --border: #E2E8F0;
+      --text-primary: #0F172A;
+      --text-secondary: #475569;
+      --text-muted: #94A3B8;
+
+      --red-bg: #FEE2E2;
+      --red-text: #991B1B;
+      --amber-bg: #FEF3C7;
+      --amber-text: #92400E;
+      --gray-bg: #F1F5F9;
+      --gray-text: #475569;
+      --purple-bg: #F3E8FF;
+      --purple-text: #6B21A8;
+
+      --font-mono: 'Courier New', Courier, monospace;
+      --font-ui: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+      --drawer-h: 320px;
+    }
+
+    html { font-family: var(--font-ui); background: var(--bg); color: var(--text-primary); font-size: 14px; }
+
+    /* ── STICKY HEADER ── */
+    .app-header {
+      position: sticky; top: 0; z-index: 200;
+      background: var(--th-bg); color: white;
+      display: flex; align-items: center; gap: 12px;
+      padding: 0 20px; height: 48px;
+      border-bottom: 1px solid #334155;
+    }
+    .app-header h1 { font-size: 14px; font-weight: 600; letter-spacing: 0.01em; white-space: nowrap; }
+    .badge-sample {
+      font-size: 11px; font-family: var(--font-mono);
+      background: #334155; color: #94A3B8;
+      border-radius: 4px; padding: 2px 8px; white-space: nowrap;
+    }
+    .spacer { flex: 1; }
+    .btn-upload {
+      font-size: 12px; font-family: var(--font-ui);
+      border: 1px solid #475569; color: #CBD5E1;
+      background: transparent; border-radius: 5px;
+      padding: 5px 12px; cursor: pointer; white-space: nowrap;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-upload:hover { border-color: #94A3B8; color: white; }
+
+    /* ── KPI ROW ── */
+    .kpi-row {
+      display: flex; gap: 1px; background: var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .kpi-cell {
+      flex: 1; background: var(--surface);
+      padding: 10px 16px; display: flex; flex-direction: column; gap: 2px;
+    }
+    .kpi-num { font-family: var(--font-mono); font-size: 22px; font-weight: 700; color: var(--text-primary); line-height: 1; }
+    .kpi-num.red { color: #DC2626; }
+    .kpi-num.purple { color: #7C3AED; }
+    .kpi-num.amber { color: #D97706; }
+    .kpi-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+
+    /* ── BANNER ── */
+    .banner {
+      display: flex; align-items: center; gap: 8px;
+      background: #FFFBEB; border-bottom: 1px solid #FDE68A;
+      padding: 8px 16px; font-size: 12px; color: #92400E;
+    }
+    .banner-icon { font-size: 14px; flex-shrink: 0; }
+    .banner-text { flex: 1; }
+    .banner-close {
+      background: none; border: none; cursor: pointer; font-size: 16px;
+      color: #B45309; line-height: 1; padding: 0 2px;
+      transition: color 0.15s;
+    }
+    .banner-close:hover { color: #78350F; }
+    .banner.hidden { display: none; }
+
+    /* ── DATA QUALITY ROW ── */
+    .dq-row {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 6px 16px; font-size: 11px; color: var(--text-secondary);
+      font-family: var(--font-mono); display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+    }
+    .dq-label { color: var(--text-muted); font-family: var(--font-ui); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; margin-right: 4px; }
+    .dq-ok { color: #16A34A; }
+    .dq-missing { color: #94A3B8; }
+    .dq-sep { color: var(--border); margin: 0 8px; }
+
+    /* ── TABLE WRAPPER ── */
+    .table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* ── MAIN TABLE ── */
+    table {
+      width: 100%; border-collapse: collapse;
+      min-width: 900px;
+      font-size: 13px;
+    }
+    thead tr { background: var(--th-bg); }
+    thead th {
+      color: var(--th-text); font-family: var(--font-ui);
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.06em; padding: 10px 12px;
+      white-space: nowrap; text-align: left;
+      cursor: pointer; user-select: none;
+      position: sticky; top: 48px; z-index: 10;
+      background: var(--th-bg);
+      border-right: 1px solid #334155;
+    }
+    thead th:last-child { border-right: none; }
+    thead th:hover { background: #263547; }
+    .sort-arrow { display: inline-block; margin-left: 4px; opacity: 0.5; font-size: 10px; }
+    thead th.sorted .sort-arrow { opacity: 1; color: #38BDF8; }
+
+    /* sticky first col on mobile */
+    thead th:first-child,
+    tbody td:first-child {
+      position: sticky; left: 0; z-index: 5;
+    }
+    thead th:first-child { z-index: 15; }
+
+    tbody tr {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    tbody tr:hover { background: var(--row-hover); }
+    tbody tr.selected { background: #EFF6FF; outline: 2px solid #3B82F6; outline-offset: -2px; }
+    tbody tr.no-drawer { cursor: default; }
+
+    tbody td {
+      padding: 9px 12px; vertical-align: middle;
+      border-right: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    tbody td:last-child { border-right: none; }
+    tbody td:first-child { background: inherit; }
+
+    /* SKU code */
+    .sku-code { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
+    .sku-name { font-weight: 500; color: var(--text-primary); max-width: 180px; white-space: normal; line-height: 1.3; }
+
+    /* Days Cover cell */
+    .dc-cell { font-family: var(--font-mono); font-size: 13px; font-weight: 600; text-align: right; padding: 9px 12px; }
+    .dc-cell.red { background: var(--red-bg); color: var(--red-text); }
+    .dc-cell.amber { background: var(--amber-bg); color: var(--amber-text); }
+    .dc-cell.gray { background: var(--gray-bg); color: var(--gray-text); }
+    .dc-cell.purple { background: var(--purple-bg); color: var(--purple-text); }
+    .dc-cell.none { color: var(--text-muted); font-style: italic; font-size: 11px; }
+
+    /* Mono numbers */
+    .mono { font-family: var(--font-mono); font-size: 13px; }
+    .num-right { text-align: right; font-family: var(--font-mono); }
+    .muted { color: var(--text-muted); }
+    .small-note { font-size: 11px; color: var(--text-muted); font-style: italic; display: block; margin-top: 2px; }
+
+    /* Action badge */
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.07em;
+      text-transform: uppercase; border-radius: 4px; padding: 3px 7px;
+      line-height: 1; white-space: nowrap;
+    }
+    .badge.expedite { background: var(--red-bg); color: var(--red-text); border: 1px solid #FECACA; }
+    .badge.hold { background: var(--gray-bg); color: var(--gray-text); border: 1px solid var(--border); }
+    .badge.deadstock { background: var(--purple-bg); color: var(--purple-text); border: 1px solid #E9D5FF; }
+    .badge.reorder { background: var(--amber-bg); color: var(--amber-text); border: 1px solid #FDE68A; }
+
+    .offseason-tag {
+      display: inline-flex; align-items: center; gap: 3px;
+      font-size: 10px; color: #6B21A8; background: #F3E8FF;
+      border: 1px solid #E9D5FF; border-radius: 3px; padding: 2px 5px;
+      margin-left: 4px; font-style: normal;
+    }
+
+    /* Lead time editable */
+    .lt-cell { display: flex; align-items: center; gap: 4px; }
+    .lt-val { font-family: var(--font-mono); }
+    .lt-unit { font-size: 11px; color: var(--text-muted); }
+    .btn-edit {
+      background: none; border: none; cursor: pointer; padding: 2px;
+      color: var(--text-muted); line-height: 1; border-radius: 3px;
+      transition: color 0.15s, background 0.15s;
+      display: inline-flex; align-items: center;
+    }
+    .btn-edit:hover { color: #3B82F6; background: #EFF6FF; }
+    .lt-input {
+      font-family: var(--font-mono); font-size: 13px;
+      width: 48px; border: 1px solid #3B82F6; border-radius: 4px;
+      padding: 2px 4px; background: white; color: var(--text-primary);
+      outline: none;
+    }
+    .lt-input:focus { box-shadow: 0 0 0 2px #BFDBFE; }
+
+    /* Vendor name */
+    .vendor-name { font-size: 12px; color: var(--text-secondary); max-width: 130px; white-space: normal; line-height: 1.3; }
+
+    /* ── FORMULA PANEL ── */
+    .formula-panel {
+      margin: 12px 0 0 0; border: 1px solid var(--border);
+      border-radius: 6px; overflow: hidden; background: var(--surface);
+    }
+    .formula-toggle {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 16px; cursor: pointer; background: #F8FAFC;
+      border-bottom: 1px solid transparent; user-select: none;
+      font-size: 12px; font-weight: 600; color: var(--text-secondary);
+      transition: background 0.15s;
+    }
+    .formula-toggle:hover { background: #F1F5F9; }
+    .formula-toggle.open { border-bottom-color: var(--border); }
+    .formula-chevron { transition: transform 0.2s; font-size: 10px; }
+    .formula-toggle.open .formula-chevron { transform: rotate(180deg); }
+    .formula-body { display: none; padding: 16px; }
+    .formula-body.open { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+    .formula-item { font-size: 12px; }
+    .formula-name { font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+    .formula-eq { font-family: var(--font-mono); font-size: 11px; color: #7C3AED; background: var(--purple-bg); border-radius: 4px; padding: 4px 8px; word-break: break-all; }
+
+    /* ── DRAWER ── */
+    .drawer-overlay {
+      display: none; position: fixed; inset: 0; z-index: 300;
+      background: rgba(15,23,42,0.25);
+    }
+    .drawer-overlay.open { display: block; }
+    .drawer {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 400;
+      height: var(--drawer-h); background: white;
+      border-top: 2px solid #E2E8F0;
+      box-shadow: 0 -8px 32px rgba(15,23,42,0.12);
+      transform: translateY(100%);
+      transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+      display: flex; flex-direction: column;
+    }
+    .drawer.open { transform: translateY(0); }
+    .drawer-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 20px; border-bottom: 1px solid var(--border);
+      background: #F8FAFC; flex-shrink: 0;
+    }
+    .drawer-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+    .drawer-sku { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); margin-left: 4px; }
+    .drawer-template-tag {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.07em;
+      background: var(--red-bg); color: var(--red-text);
+      border: 1px solid #FECACA; border-radius: 4px; padding: 2px 6px;
+    }
+    .spacer { flex: 1; }
+    .btn-switch { font-size: 11px; color: #3B82F6; background: none; border: none; cursor: pointer; text-decoration: underline; padding: 0; }
+    .btn-switch:hover { color: #1D4ED8; }
+    .btn-copy {
+      font-size: 11px; font-family: var(--font-ui);
+      background: var(--th-bg); color: white; border: none; border-radius: 5px;
+      padding: 5px 12px; cursor: pointer; transition: background 0.15s;
+    }
+    .btn-copy:hover { background: #334155; }
+    .btn-copy.copied { background: #16A34A; }
+    .btn-close {
+      background: none; border: none; cursor: pointer; color: var(--text-muted);
+      font-size: 18px; line-height: 1; padding: 2px 4px; border-radius: 4px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .btn-close:hover { color: var(--text-primary); background: var(--border); }
+    .drawer-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
+    .email-block {
+      font-family: var(--font-mono); font-size: 12px; line-height: 1.7;
+      color: var(--text-primary); white-space: pre-wrap; word-break: break-word;
+      background: #FAFAFA; border: 1px solid var(--border); border-radius: 6px;
+      padding: 14px 16px;
+    }
+    .drawer-empty {
+      display: flex; align-items: center; justify-content: center;
+      height: 100%; color: var(--text-muted); font-size: 13px; text-align: center;
+    }
+
+    /* ── MAIN CONTENT ── */
+    .main { padding: 0 0 calc(var(--drawer-h) + 24px) 0; }
+    .inner { max-width: 1400px; margin: 0 auto; padding: 0 16px; }
+
+    /* ── BACK LINK ── */
+    .back-link {
+      position: fixed; bottom: 16px; right: 20px; z-index: 500;
+      font-size: 12px; font-family: var(--font-ui);
+      background: var(--th-bg); color: #CBD5E1;
+      border-radius: 6px; padding: 7px 14px;
+      text-decoration: none; box-shadow: 0 2px 8px rgba(15,23,42,0.2);
+      transition: background 0.15s, color 0.15s;
+    }
+    .back-link:hover { background: #334155; color: white; }
+
+    /* Section spacing */
+    .section { padding: 12px 16px; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 768px) {
+      .kpi-row { flex-wrap: wrap; }
+      .kpi-cell { flex: 1 1 45%; border-bottom: 1px solid var(--border); }
+      .app-header h1 { font-size: 12px; }
+      table { min-width: 700px; }
+      .sku-name { max-width: 120px; }
+      .vendor-name { max-width: 90px; }
+    }
+    @media (max-width: 480px) {
+      .kpi-cell { flex: 1 1 100%; }
+      .drawer { height: 75vh; }
+      :root { --drawer-h: 75vh; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── STICKY HEADER ── -->
+<header class="app-header">
+  <h1>Inventory Stockout Risk Checker</h1>
+  <span class="badge-sample">Sample data — 10 SKUs</span>
+  <div class="spacer"></div>
+  <button class="btn-upload" onclick="alert('CSV upload coming soon.')">⬆ Upload CSV</button>
+</header>
+
+<!-- ── KPI ROW ── -->
+<div class="kpi-row">
+  <div class="kpi-cell">
+    <span class="kpi-num">10</span>
+    <span class="kpi-label">SKUs Analyzed</span>
+  </div>
+  <div class="kpi-cell">
+    <span class="kpi-num red">4</span>
+    <span class="kpi-label">Expedite Now</span>
+  </div>
+  <div class="kpi-cell">
+    <span class="kpi-num purple">3</span>
+    <span class="kpi-label">Deadstock</span>
+  </div>
+  <div class="kpi-cell">
+    <span class="kpi-num amber">$2,296</span>
+    <span class="kpi-label">Cash Tied Up</span>
+  </div>
+</div>
+
+<!-- ── MAIN CONTENT ── -->
+<div class="main">
+  <!-- Banner -->
+  <div class="banner" id="banner">
+    <span class="banner-icon">⚠</span>
+    <span class="banner-text"><strong>Verify net of returns:</strong> Available qty and committed units may not reflect pending returns or RMA stock. Cross-check with your WMS before placing orders.</span>
+    <button class="banner-close" onclick="document.getElementById('banner').classList.add('hidden')" aria-label="Dismiss">×</button>
+  </div>
+
+  <!-- Data Quality Row -->
+  <div class="dq-row">
+    <span class="dq-label">Data Quality</span>
+    <span>Used:</span>
+    <span class="dq-ok">unit_cost ✓</span>
+    <span class="dq-ok">vendor ✓</span>
+    <span class="dq-ok">committed_units ✓</span>
+    <span class="dq-ok">incoming_units ✓</span>
+    <span class="dq-sep">|</span>
+    <span>Missing:</span>
+    <span class="dq-missing">category ○</span>
+  </div>
+
+  <!-- Table -->
+  <div class="section" style="padding-top:8px; padding-bottom:0;">
+    <div class="table-wrap">
+      <table id="main-table">
+        <thead>
+          <tr>
+            <th data-col="sku" onclick="sortTable('sku')">SKU <span class="sort-arrow">↕</span></th>
+            <th data-col="name" onclick="sortTable('name')">Product Name <span class="sort-arrow">↕</span></th>
+            <th data-col="onhand" onclick="sortTable('onhand')" style="text-align:right;">On-Hand <span class="sort-arrow">↕</span></th>
+            <th data-col="days_cover" onclick="sortTable('days_cover')" class="sorted">Days Cover <span class="sort-arrow">↑</span></th>
+            <th data-col="lead" onclick="sortTable('lead')" style="text-align:right;">Lead Time <span class="sort-arrow">↕</span></th>
+            <th data-col="action" onclick="sortTable('action')">Action <span class="sort-arrow">↕</span></th>
+            <th data-col="reorder_qty" onclick="sortTable('reorder_qty')" style="text-align:right;">Reorder Qty <span class="sort-arrow">↕</span></th>
+            <th data-col="cash" onclick="sortTable('cash')" style="text-align:right;">Est. Cash <span class="sort-arrow">↕</span></th>
+            <th data-col="vendor" onclick="sortTable('vendor')">Vendor <span class="sort-arrow">↕</span></th>
+          </tr>
+        </thead>
+        <tbody id="table-body">
+          <!-- rows rendered by JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Formula Panel -->
+  <div class="inner">
+    <div class="formula-panel" style="margin-bottom: 16px;">
+      <div class="formula-toggle" id="formula-toggle" onclick="toggleFormula()">
+        <span class="formula-chevron" id="formula-chevron">▼</span>
+        <span>Calculation Formulas</span>
+        <span style="font-size:11px; font-weight:400; color:var(--text-muted); margin-left:8px;">Click to expand</span>
+      </div>
+      <div class="formula-body" id="formula-body">
+        <div class="formula-item">
+          <div class="formula-name">Daily Velocity</div>
+          <div class="formula-eq">sold_30d ÷ 30</div>
+        </div>
+        <div class="formula-item">
+          <div class="formula-name">Available Qty</div>
+          <div class="formula-eq">on_hand − committed_units</div>
+        </div>
+        <div class="formula-item">
+          <div class="formula-name">Effective Stock</div>
+          <div class="formula-eq">available + incoming_units</div>
+        </div>
+        <div class="formula-item">
+          <div class="formula-name">Days Cover</div>
+          <div class="formula-eq">effective_stock ÷ daily_velocity</div>
+        </div>
+        <div class="formula-item">
+          <div class="formula-name">Reorder Qty</div>
+          <div class="formula-eq">(lead_days × daily_velocity) − effective_stock + buffer</div>
+        </div>
+        <div class="formula-item">
+          <div class="formula-name">Est. Cash</div>
+          <div class="formula-eq">reorder_qty × unit_cost</div>
+        </div>
+        <div class="formula-item">
+          <div class="formula-name">EXPEDITE Trigger</div>
+          <div class="formula-eq">days_cover &lt; lead_time_days</div>
+        </div>
+        <div class="formula-item">
+          <div class="formula-name">DEADSTOCK Trigger</div>
+          <div class="formula-eq">days_cover &gt; 365 OR sold_90d = 0</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── DRAWER OVERLAY ── -->
+<div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+
+<!-- ── SUPPLIER DRAFT DRAWER ── -->
+<div class="drawer" id="drawer">
+  <div class="drawer-header">
+    <span class="drawer-title">Supplier Draft</span>
+    <span class="drawer-sku" id="drawer-sku-label"></span>
+    <span class="drawer-template-tag" id="drawer-template-tag">URGENT EXPEDITE</span>
+    <div class="spacer"></div>
+    <button class="btn-switch" id="btn-switch" onclick="switchTemplate()">Switch to standard reorder</button>
+    <button class="btn-copy" id="btn-copy" onclick="copyEmail()">Copy</button>
+    <button class="btn-close" onclick="closeDrawer()" aria-label="Close drawer">×</button>
+  </div>
+  <div class="drawer-body">
+    <div class="email-block" id="email-body">
+      Select an EXPEDITE row to view the supplier draft.
+    </div>
+  </div>
+</div>
+
+<!-- ── BACK LINK ── -->
+<a class="back-link" href="../index.html">← Back to gallery</a>
+
+<script>
+// ── DATA ──
+const SKUS = [
+  {
+    id: 'SKU-1004', name: 'Cotton Drawer Organizer',
+    onhand: 6, sold30: 48, sold90: 150, lead: 30,
+    avail: 6, avail_note: null, effective: 2, effective_note: null,
+    days_cover: 1.2, days_cover_display: '1.2d',
+    action: 'EXPEDITE', reorder_qty: 108, cash: 513, cash_tied: null,
+    risk: 'HIGH', vendor: 'Northstar Home', note: '29 days short',
+    is_offseason: false
+  },
+  {
+    id: 'SKU-1001', name: 'Bamboo Storage Bin - Small',
+    onhand: 42, sold30: 90, sold90: 260, lead: 28,
+    avail: 32, avail_note: 'committed:10', effective: 32, effective_note: null,
+    days_cover: 10.7, days_cover_display: '10.7d',
+    action: 'EXPEDITE', reorder_qty: 144, cash: 1224, cash_tied: null,
+    risk: 'HIGH', vendor: 'Northstar Home', note: '17 days short',
+    is_offseason: false
+  },
+  {
+    id: 'SKU-1007', name: 'Glass Meal Prep Container 3pk',
+    onhand: 12, sold30: 6, sold90: 22, lead: 60,
+    avail: 4, avail_note: 'committed:8', effective: 4, effective_note: null,
+    days_cover: 16.4, days_cover_display: '16.4d',
+    action: 'EXPEDITE', reorder_qty: 18, cash: 194, cash_tied: null,
+    risk: 'HIGH', vendor: 'Blue Ridge Goods', note: '44 days short',
+    is_offseason: false
+  },
+  {
+    id: 'SKU-1002', name: 'Bamboo Storage Bin - Large',
+    onhand: 18, sold30: 72, sold90: 210, lead: 35,
+    avail: 18, avail_note: null, effective: 42, effective_note: 'incoming:24',
+    days_cover: 17.5, days_cover_display: '17.5d',
+    action: 'EXPEDITE', reorder_qty: 120, cash: 1470, cash_tied: null,
+    risk: 'HIGH', vendor: 'Northstar Home', note: '18 days short',
+    is_offseason: false
+  },
+  {
+    id: 'SKU-1008', name: 'Linen Closet Divider',
+    onhand: 0, sold30: 25, sold90: 70, lead: 28,
+    avail: 0, avail_note: null, effective: 40, effective_note: 'incoming:40',
+    days_cover: 48.0, days_cover_display: '48.0d',
+    action: 'HOLD', reorder_qty: null, cash: null, cash_tied: null,
+    risk: 'LOW', vendor: 'Northstar Home', note: null,
+    is_offseason: false
+  },
+  {
+    id: 'SKU-1006', name: 'Magnetic Spice Labels',
+    onhand: 88, sold30: 30, sold90: 95, lead: 14,
+    avail: 88, avail_note: null, effective: 88, effective_note: null,
+    days_cover: 83.3, days_cover_display: '83.3d',
+    action: 'HOLD', reorder_qty: null, cash: null, cash_tied: null,
+    risk: 'LOW', vendor: 'LabelWorks', note: null,
+    is_offseason: false
+  },
+  {
+    id: 'SKU-1009', name: 'Compostable Shipping Mailer 50pk',
+    onhand: 500, sold30: 150, sold90: 420, lead: 20,
+    avail: 475, avail_note: 'committed:25', effective: 475, effective_note: null,
+    days_cover: 95.0, days_cover_display: '95.0d',
+    action: 'HOLD', reorder_qty: null, cash: null, cash_tied: null,
+    risk: 'LOW', vendor: 'PackRight', note: null,
+    is_offseason: false
+  },
+  {
+    id: 'SKU-1005', name: 'Reusable Produce Bag Set',
+    onhand: 310, sold30: 0, sold90: 0, lead: 45,
+    avail: 310, avail_note: null, effective: 310, effective_note: null,
+    days_cover: null, days_cover_display: null,
+    action: 'HOLD', reorder_qty: null, cash: null, cash_tied: null,
+    risk: null, vendor: 'Greenline Supply', note: 'No recent sales',
+    is_offseason: false
+  },
+  {
+    id: 'SKU-1003', name: 'Silicone Travel Bottle Set',
+    onhand: 240, sold30: 12, sold90: 35, lead: 21,
+    avail: 235, avail_note: 'committed:5', effective: 235, effective_note: null,
+    days_cover: 587.5, days_cover_display: '587.5d',
+    action: 'DEADSTOCK', reorder_qty: null, cash: null, cash_tied: 744,
+    risk: 'DEADSTOCK HIGH', vendor: 'Blue Ridge Goods', note: null,
+    is_offseason: false
+  },
+  {
+    id: 'SKU-1010', name: 'Holiday Gift Wrap Bundle',
+    onhand: 120, sold30: 0, sold90: 6, lead: 50,
+    avail: 120, avail_note: null, effective: 120, effective_note: null,
+    days_cover: 1791, days_cover_display: '1,791d',
+    action: 'DEADSTOCK', reorder_qty: null, cash: null, cash_tied: 870,
+    risk: 'DEADSTOCK HIGH', vendor: 'Seasonal House', note: 'Off-season SKU',
+    is_offseason: true
+  }
+];
+
+// Mutable lead times (can be edited inline)
+const leadTimes = {};
+SKUS.forEach(s => { leadTimes[s.id] = s.lead; });
+
+// ── SORT STATE ──
+let sortCol = 'days_cover';
+let sortDir = 1; // 1 = asc, -1 = desc
+
+// ── DRAWER STATE ──
+let selectedSkuId = null;
+let drawerMode = 'urgent'; // 'urgent' | 'standard'
+
+// ── SORT ──
+function getSortVal(sku, col) {
+  switch(col) {
+    case 'sku': return sku.id;
+    case 'name': return sku.name;
+    case 'onhand': return sku.onhand;
+    case 'days_cover': return sku.days_cover === null ? 9999 : sku.days_cover;
+    case 'lead': return leadTimes[sku.id];
+    case 'action': return sku.action;
+    case 'reorder_qty': return sku.reorder_qty === null ? -1 : sku.reorder_qty;
+    case 'cash': return (sku.cash || sku.cash_tied || 0);
+    case 'vendor': return sku.vendor;
+    default: return 0;
+  }
+}
+
+function sortTable(col) {
+  if (sortCol === col) sortDir *= -1;
+  else { sortCol = col; sortDir = 1; }
+  renderTable();
+  updateSortHeaders();
+}
+
+function updateSortHeaders() {
+  document.querySelectorAll('thead th').forEach(th => {
+    th.classList.remove('sorted');
+    th.querySelector('.sort-arrow').textContent = '↕';
+  });
+  const th = document.querySelector(`thead th[data-col="${sortCol}"]`);
+  if (th) {
+    th.classList.add('sorted');
+    th.querySelector('.sort-arrow').textContent = sortDir === 1 ? '↑' : '↓';
+  }
+}
+
+// ── RENDER TABLE ──
+function renderTable() {
+  const sorted = [...SKUS].sort((a, b) => {
+    const av = getSortVal(a, sortCol), bv = getSortVal(b, sortCol);
+    if (av < bv) return -1 * sortDir;
+    if (av > bv) return 1 * sortDir;
+    return 0;
+  });
+
+  const tbody = document.getElementById('table-body');
+  tbody.innerHTML = '';
+
+  sorted.forEach(sku => {
+    const tr = document.createElement('tr');
+    tr.dataset.id = sku.id;
+    if (sku.action !== 'EXPEDITE') tr.classList.add('no-drawer');
+    if (selectedSkuId === sku.id) tr.classList.add('selected');
+
+    const isExpedite = sku.action === 'EXPEDITE';
+    tr.addEventListener('click', (e) => {
+      // Don't open drawer if clicking lead-time edit
+      if (e.target.closest('.lt-cell')) return;
+      if (isExpedite) openDrawer(sku.id);
+    });
+
+    // Days cover cell class
+    let dcClass = 'gray';
+    let dcText = sku.days_cover_display || '—';
+    if (sku.action === 'EXPEDITE') dcClass = 'red';
+    else if (sku.action === 'DEADSTOCK') dcClass = 'purple';
+    else if (sku.days_cover === null) { dcClass = 'none'; dcText = 'No recent sales'; }
+
+    // Action badge
+    let badgeClass = 'hold';
+    if (sku.action === 'EXPEDITE') badgeClass = 'expedite';
+    else if (sku.action === 'DEADSTOCK') badgeClass = 'deadstock';
+
+    // Cash display
+    let cashDisplay = '—';
+    if (sku.cash) cashDisplay = '$' + sku.cash.toLocaleString();
+    else if (sku.cash_tied) cashDisplay = '<span style="color:#7C3AED;">$' + sku.cash_tied.toLocaleString() + ' tied</span>';
+
+    // Note
+    let noteHtml = sku.note ? `<span class="small-note">${sku.note}</span>` : '';
+
+    // Off-season tag
+    let offseasonHtml = sku.is_offseason
+      ? `<span class="offseason-tag"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> Off-season</span>`
+      : '';
+
+    // Reorder qty
+    let rqHtml = sku.reorder_qty ? `<span class="mono">${sku.reorder_qty}</span>` : '<span class="muted">—</span>';
+
+    tr.innerHTML = `
+      <td>
+        <div class="sku-code">${sku.id}</div>
+      </td>
+      <td>
+        <div class="sku-name">${sku.name}</div>
+      </td>
+      <td style="text-align:right;" class="mono">${sku.onhand.toLocaleString()}</td>
+      <td class="dc-cell ${dcClass}">${dcText}</td>
+      <td>
+        <div class="lt-cell" id="lt-wrap-${sku.id}">
+          <span class="lt-val" id="lt-val-${sku.id}">${leadTimes[sku.id]}</span>
+          <span class="lt-unit">d</span>
+          <button class="btn-edit" onclick="editLead('${sku.id}', event)" title="Edit lead time">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+        </div>
+      </td>
+      <td>
+        <span class="badge ${badgeClass}">${sku.action}</span>${offseasonHtml}
+        ${noteHtml}
+      </td>
+      <td style="text-align:right;">${rqHtml}</td>
+      <td style="text-align:right;" class="mono">${cashDisplay}</td>
+      <td><span class="vendor-name">${sku.vendor}</span></td>
+    `;
+
+    tbody.appendChild(tr);
+  });
+}
+
+// ── INLINE LEAD TIME EDIT ──
+function editLead(skuId, event) {
+  event.stopPropagation();
+  const wrap = document.getElementById(`lt-wrap-${skuId}`);
+  const current = leadTimes[skuId];
+
+  wrap.innerHTML = `
+    <input class="lt-input" type="number" id="lt-input-${skuId}" value="${current}" min="1" max="365"
+      onblur="saveLead('${skuId}')" onkeydown="handleLeadKey(event, '${skuId}')" />
+    <span class="lt-unit">d</span>
+  `;
+  const inp = document.getElementById(`lt-input-${skuId}`);
+  inp.focus(); inp.select();
+}
+
+function handleLeadKey(e, skuId) {
+  if (e.key === 'Enter') saveLead(skuId);
+  if (e.key === 'Escape') { leadTimes[skuId] = leadTimes[skuId]; renderTable(); }
+}
+
+function saveLead(skuId) {
+  const inp = document.getElementById(`lt-input-${skuId}`);
+  if (!inp) return;
+  const val = parseInt(inp.value, 10);
+  if (!isNaN(val) && val > 0) leadTimes[skuId] = val;
+  renderTable();
+}
+
+// ── DRAWER EMAILS ──
+function getUrgentEmail(sku) {
+  const lt = leadTimes[sku.id];
+  return `To: purchasing@${sku.vendor.toLowerCase().replace(/\s+/g,'-')}.com
+Subject: URGENT — Reorder Request: ${sku.name} [${sku.id}]
+
+Hi ${sku.vendor} Team,
+
+I'm writing with an urgent reorder request. We are critically low on:
+
+  Product : ${sku.name}
+  SKU     : ${sku.id}
+  Qty Req : ${sku.reorder_qty} units
+  Est. PO : $${sku.cash ? sku.cash.toLocaleString() : 'TBD'}
+
+Current stock covers only ${sku.days_cover}d of demand,
+and your lead time is ${lt} days — we are ${lt - sku.days_cover < 0 ? Math.abs(lt - sku.days_cover).toFixed(0) : 0} days short.
+
+Can you confirm:
+  1. Availability of ${sku.reorder_qty} units
+  2. Earliest ship date (air freight if necessary)
+  3. Any rush order premium
+
+This is time-sensitive. Please reply by end of business today.
+
+Best regards,
+Dock to AI Ops Team`;
+}
+
+function getStandardEmail(sku) {
+  const lt = leadTimes[sku.id];
+  return `To: orders@${sku.vendor.toLowerCase().replace(/\s+/g,'-')}.com
+Subject: Purchase Order Request: ${sku.name} [${sku.id}]
+
+Hi ${sku.vendor} Team,
+
+Please prepare a purchase order for the following:
+
+  Product   : ${sku.name}
+  SKU       : ${sku.id}
+  Qty       : ${sku.reorder_qty} units
+  Est. Value: $${sku.cash ? sku.cash.toLocaleString() : 'TBD'}
+  Lead Time : ${lt} days (standard)
+  Ship by   : Standard ground
+
+Current days of cover: ${sku.days_cover}d.
+Reorder triggered as stock approaches reorder point.
+
+Please confirm receipt of this request and expected ship date.
+
+Thank you,
+Dock to AI Ops Team`;
+}
+
+function openDrawer(skuId) {
+  selectedSkuId = skuId;
+  drawerMode = 'urgent';
+  const sku = SKUS.find(s => s.id === skuId);
+  updateDrawerContent(sku);
+
+  document.getElementById('drawer-overlay').classList.add('open');
+  document.getElementById('drawer').classList.add('open');
+
+  // Highlight selected row
+  document.querySelectorAll('tbody tr').forEach(tr => {
+    tr.classList.toggle('selected', tr.dataset.id === skuId);
+  });
+}
+
+function updateDrawerContent(sku) {
+  document.getElementById('drawer-sku-label').textContent = sku.id + ' · ' + sku.name;
+  const tag = document.getElementById('drawer-template-tag');
+  const switchBtn = document.getElementById('btn-switch');
+  const emailBody = document.getElementById('email-body');
+
+  if (drawerMode === 'urgent') {
+    tag.textContent = 'URGENT EXPEDITE';
+    tag.style.background = '#FEE2E2'; tag.style.color = '#991B1B'; tag.style.borderColor = '#FECACA';
+    switchBtn.textContent = 'Switch to standard reorder';
+    emailBody.textContent = getUrgentEmail(sku);
+  } else {
+    tag.textContent = 'STANDARD REORDER';
+    tag.style.background = '#F1F5F9'; tag.style.color = '#475569'; tag.style.borderColor = '#E2E8F0';
+    switchBtn.textContent = 'Switch to urgent expedite';
+    emailBody.textContent = getStandardEmail(sku);
+  }
+}
+
+function switchTemplate() {
+  drawerMode = drawerMode === 'urgent' ? 'standard' : 'urgent';
+  const sku = SKUS.find(s => s.id === selectedSkuId);
+  if (sku) updateDrawerContent(sku);
+}
+
+function closeDrawer() {
+  selectedSkuId = null;
+  document.getElementById('drawer-overlay').classList.remove('open');
+  document.getElementById('drawer').classList.remove('open');
+  document.querySelectorAll('tbody tr').forEach(tr => tr.classList.remove('selected'));
+}
+
+function copyEmail() {
+  const text = document.getElementById('email-body').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('btn-copy');
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  }).catch(() => {
+    // Fallback
+    const el = document.getElementById('email-body');
+    const range = document.createRange(); range.selectNodeContents(el);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    document.execCommand('copy');
+    sel.removeAllRanges();
+  });
+}
+
+// ── FORMULA TOGGLE ──
+function toggleFormula() {
+  const toggle = document.getElementById('formula-toggle');
+  const body = document.getElementById('formula-body');
+  const chevron = document.getElementById('formula-chevron');
+  const isOpen = body.classList.toggle('open');
+  toggle.classList.toggle('open', isOpen);
+  chevron.textContent = isOpen ? '▲' : '▼';
+}
+
+// ── INIT ──
+renderTable();
+updateSortHeaders();
+</script>
+</body>
+</html>

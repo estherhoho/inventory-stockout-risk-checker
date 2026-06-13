@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visualization Playground — Inventory Stockout Risk Checker</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box}
+  body{margin:0;background:#f5f7fb;color:#0f172a;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.5}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 18px 80px}
+  .top{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+  .mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#8a72c8,#6f6bc0);color:#fff;font-weight:800;display:grid;place-items:center}
+  h1{font-size:20px;margin:0;letter-spacing:-.02em}
+  .sub{color:#64748b;margin:2px 0 0}
+  .note{background:#fff;border:1px solid #e6ebf2;border-left:3px solid #6f6bc0;border-radius:10px;padding:12px 15px;margin:18px 0 22px;color:#475569}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:820px){.grid{grid-template-columns:1fr}}
+  .card{background:#fff;border:1px solid #e6ebf2;border-radius:14px;overflow:hidden;box-shadow:0 6px 18px rgba(15,23,42,.07);display:flex;flex-direction:column}
+  .card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 16px;border-bottom:1px solid #eef2f7}
+  .badge{background:#f4f2fb;color:#6253a0;border:1px solid #e4def3;border-radius:999px;padding:3px 11px;font-weight:700;font-size:12px}
+  .ctype{color:#64748b;font-size:12px;font-weight:600}
+  .frame{position:relative;height:430px;background:#f5f7fb;border-bottom:1px solid #eef2f7;overflow:hidden}
+  .frame iframe{position:absolute;top:0;left:0;width:142.857%;height:142.857%;border:0;transform:scale(.7);transform-origin:top left;background:#f5f7fb}
+  .card-foot{padding:13px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .desc{color:#475569;font-size:13px;margin:0}
+  .open{flex:0 0 auto;background:linear-gradient(135deg,#8a72c8,#6f6bc0);color:#fff;text-decoration:none;font-weight:700;font-size:13px;padding:8px 14px;border-radius:9px;white-space:nowrap}
+  .open:hover{filter:brightness(1.05)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="mark">D</div>
+    <div>
+      <h1>Visualization Playground</h1>
+      <p class="sub">Inventory Stockout Risk Checker · 5 chart-led directions · same 10-SKU sample data</p>
+    </div>
+  </div>
+  <div class="note">
+    These replace the tile dashboard with real charts. Scan the five below, click <strong>Open full page</strong> to see any one properly, then tell me which direction (or mix) you want — and I'll build the real tool around it. <em>Data-quality panel removed here; we can add it back as a small one-line note if you want it.</em>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-head"><span class="badge">Option 1 · Risk Bars</span><span class="ctype">Horizontal bar chart</span></div>
+      <div class="frame"><iframe src="option-1-risk-bars.html" loading="lazy" title="Option 1"></iframe></div>
+      <div class="card-foot"><p class="desc">Days of stock left per SKU, sorted by urgency, with a lead-time danger zone. Clearest for “what runs out first.”</p><a class="open" href="option-1-risk-bars.html" target="_blank">Open full page ↗</a></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="badge">Option 2 · Status Donut</span><span class="ctype">Donut + ranked table</span></div>
+      <div class="frame"><iframe src="option-2-status-donut.html" loading="lazy" title="Option 2"></iframe></div>
+      <div class="card-foot"><p class="desc">A donut of your catalog’s status plus a clean ranked table with inline bars. Classic, scannable analytics.</p><a class="open" href="option-2-status-donut.html" target="_blank">Open full page ↗</a></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="badge">Option 3 · Cash × Urgency</span><span class="ctype">Bubble / scatter (interactive)</span></div>
+      <div class="frame"><iframe src="option-3-cash-urgency-bubble.html" loading="lazy" title="Option 3"></iframe></div>
+      <div class="card-foot"><p class="desc">How urgent (x) vs how much money (y), bubble size = units. Hover to find the urgent + expensive SKUs.</p><a class="open" href="option-3-cash-urgency-bubble.html" target="_blank">Open full page ↗</a></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="badge">Option 4 · Stockout Runway</span><span class="ctype">Timeline / Gantt</span></div>
+      <div class="frame"><iframe src="option-4-stockout-runway.html" loading="lazy" title="Option 4"></iframe></div>
+      <div class="card-foot"><p class="desc">A timeline per SKU: your stock runway vs when a reorder arrives, with the “days short” gap in red. Most intuitive for timing.</p><a class="open" href="option-4-stockout-runway.html" target="_blank">Open full page ↗</a></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="badge">Option 5 · Analytics</span><span class="ctype">Multi-chart dashboard</span></div>
+      <div class="frame"><iframe src="option-5-analytics-dashboard.html" loading="lazy" title="Option 5"></iframe></div>
+      <div class="card-foot"><p class="desc">The tidy multi-chart version: KPI strip + a cash bar chart + status donut + a clean table, all in aligned zones.</p><a class="open" href="option-5-analytics-dashboard.html" target="_blank">Open full page ↗</a></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,2 @@
+sku,product_name,inventory_on_hand,units_sold_30d,units_sold_90d,lead_time_days,committed_units,incoming_units
+SKU-COMMIT,Committed Over On Hand,5,30,60,20,9,0

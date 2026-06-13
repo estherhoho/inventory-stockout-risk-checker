@@ -1,0 +1,10 @@
+# dependencies
+node_modules/
+
+# OS / editor
+.DS_Store
+*.log
+
+# temp / generated QA artifacts
+.tmp/
+work/qa/

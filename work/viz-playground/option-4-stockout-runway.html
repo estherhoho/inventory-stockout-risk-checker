@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventory Stockout Risk Checker · Option 4 · Stockout Runway</title>
+<style>
+  :root{
+    --page:#f5f7fb; --card:#fff; --border:#e6ebf2;
+    --ink:#0f172a; --muted:#64748b;
+    --brand-a:#8a72c8; --brand-b:#6f6bc0; --brand-solid:#6253a0; --brand-soft:#f4f2fb;
+    --exp:#dc2626; --exp-bg:#fde7e7;
+    --reo:#ea580c; --reo-bg:#fff1e3;
+    --hold:#15803d; --hold-bg:#e6f8ee;
+    --dead:#6d5bb0; --dead-bg:#eee9f7;
+    --radius:12px;
+    --shadow:0 6px 18px rgba(15,23,42,.07);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--page);
+    color:var(--ink);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    line-height:1.45;
+  }
+
+  /* ---------- Header ---------- */
+  .topbar{
+    background:var(--card);
+    border-bottom:1px solid var(--border);
+  }
+  .topbar-inner{
+    max-width:1080px;
+    margin:0 auto;
+    padding:14px 28px;
+    display:flex;
+    align-items:center;
+    gap:14px;
+  }
+  .logo{
+    width:28px;height:28px;flex:0 0 28px;
+    border-radius:8px;
+    background:linear-gradient(135deg,var(--brand-a),var(--brand-b));
+    color:#fff;
+    font-weight:700;font-size:16px;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 2px 6px rgba(98,83,160,.35);
+  }
+  .titles{display:flex;flex-direction:column;line-height:1.25;}
+  .titles h1{font-size:16px;font-weight:650;margin:0;letter-spacing:-.01em;}
+  .titles .sub{font-size:12.5px;color:var(--muted);margin-top:1px;}
+  .badge{
+    margin-left:auto;
+    background:var(--brand-soft);
+    color:var(--brand-solid);
+    border:1px solid #e3ddf4;
+    font-size:12px;font-weight:600;
+    padding:6px 12px;border-radius:999px;
+    white-space:nowrap;
+  }
+
+  /* ---------- Layout ---------- */
+  .wrap{max-width:1080px;margin:0 auto;padding:28px;}
+
+  /* ---------- Summary chips ---------- */
+  .summary{
+    display:flex;gap:14px;flex-wrap:wrap;margin-bottom:22px;
+  }
+  .chip{
+    flex:1 1 0;min-width:150px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:14px 16px;
+    display:flex;align-items:center;gap:12px;
+  }
+  .chip .dot{width:10px;height:10px;border-radius:3px;flex:0 0 10px;}
+  .chip .meta{display:flex;flex-direction:column;}
+  .chip .num{font-size:22px;font-weight:700;line-height:1;}
+  .chip .lbl{font-size:12px;color:var(--muted);margin-top:3px;font-weight:500;}
+  .dot.exp{background:var(--exp);}
+  .dot.dead{background:var(--dead);}
+  .dot.hold{background:var(--hold);}
+
+  /* ---------- Chart card ---------- */
+  .card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:22px 24px 18px;
+  }
+  .card-head{margin-bottom:4px;}
+  .card-head h2{font-size:16.5px;font-weight:650;margin:0;letter-spacing:-.01em;}
+  .card-head p{font-size:13px;color:var(--muted);margin:5px 0 0;max-width:760px;}
+
+  /* ---------- Legend ---------- */
+  .legend{
+    display:flex;gap:22px;flex-wrap:wrap;
+    margin:16px 0 6px;
+    padding:12px 16px;
+    background:var(--brand-soft);
+    border:1px solid #e9e4f6;
+    border-radius:10px;
+  }
+  .legend-item{display:flex;align-items:center;gap:9px;font-size:12.5px;color:#334155;}
+  .lg-bar{width:26px;height:13px;border-radius:3px;background:linear-gradient(90deg,#cbb9ee,#9d86d6);border:1px solid #9d86d6;}
+  .lg-marker{position:relative;width:14px;height:16px;}
+  .lg-marker::before{content:"";position:absolute;left:6px;top:0;width:2px;height:16px;background:var(--ink);}
+  .lg-marker::after{content:"";position:absolute;left:2px;top:0;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid var(--ink);}
+  .lg-gap{width:26px;height:13px;border-radius:3px;background:repeating-linear-gradient(45deg,var(--exp-bg),var(--exp-bg) 4px,#fbd0d0 4px,#fbd0d0 8px);border:1px solid #f3b4b4;}
+
+  /* ---------- SVG ---------- */
+  .chart-scroll{margin-top:6px;}
+  svg{display:block;width:100%;height:auto;font-family:inherit;}
+  .axis-label{fill:var(--muted);font-size:11px;}
+  .axis-title{fill:var(--ink);font-size:11.5px;font-weight:600;}
+  .grid-line{stroke:var(--border);stroke-width:1;}
+  .grid-line.major{stroke:#dbe2ec;}
+  .track-sku{fill:var(--ink);font-size:12.5px;font-weight:600;}
+  .track-name{fill:var(--muted);font-size:11px;}
+  .track-base{fill:#f1f4f9;}
+  .bar{transition:opacity .15s ease;}
+  .cover-end-label{font-size:10.5px;font-weight:600;}
+  .marker-line{stroke:var(--ink);stroke-width:1.6;}
+  .marker-label{fill:var(--ink);font-size:10px;font-weight:600;}
+  .short-label{fill:var(--exp);font-size:10.5px;font-weight:700;}
+  .pill{font-size:10px;font-weight:700;}
+
+  .section-divider{
+    margin:20px 0 10px;
+    font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.05em;
+    display:flex;align-items:center;gap:10px;
+  }
+  .section-divider::after{content:"";flex:1;height:1px;background:var(--border);}
+
+  /* ---------- Deadstock lane ---------- */
+  .deadlane{
+    margin-top:4px;
+    background:var(--dead-bg);
+    border:1px solid #ddd4f0;
+    border-radius:10px;
+    padding:14px 16px;
+  }
+  .deadlane-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+  .deadlane-head .tag{
+    background:var(--dead);color:#fff;font-size:10.5px;font-weight:700;
+    padding:3px 9px;border-radius:999px;letter-spacing:.02em;
+  }
+  .deadlane-head .desc{font-size:12.5px;color:#4c4470;font-weight:600;}
+  .deadrow{
+    display:grid;
+    grid-template-columns:1fr auto auto;
+    align-items:center;
+    gap:14px;
+    padding:9px 4px;
+    border-top:1px solid #e2d9f3;
+  }
+  .deadrow:first-of-type{border-top:none;}
+  .deadrow .dr-name{font-size:12.5px;}
+  .deadrow .dr-name b{font-weight:650;color:var(--ink);}
+  .deadrow .dr-name span{color:var(--muted);margin-left:6px;}
+  .deadrow .dr-cover{font-size:13px;font-weight:700;color:var(--dead);text-align:right;white-space:nowrap;}
+  .deadrow .dr-cover small{display:block;font-size:10px;font-weight:500;color:#8b80b3;}
+  .deadrow .dr-action{
+    font-size:10.5px;font-weight:700;color:var(--dead);
+    background:#fff;border:1px solid #ddd4f0;
+    padding:4px 10px;border-radius:999px;white-space:nowrap;
+  }
+
+  /* ---------- Caption ---------- */
+  .caption{
+    margin-top:18px;
+    display:flex;gap:10px;align-items:flex-start;
+    font-size:12.5px;color:var(--muted);
+    padding:12px 14px;
+    background:#fafbfd;
+    border:1px solid var(--border);
+    border-radius:10px;
+  }
+  .caption .ico{
+    flex:0 0 18px;width:18px;height:18px;margin-top:1px;
+    border-radius:5px;background:var(--brand-soft);color:var(--brand-solid);
+    display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;
+  }
+  .footnote{
+    text-align:center;font-size:11px;color:#94a3b8;margin-top:18px;
+  }
+
+  /* hover */
+  .track-group:hover .track-base{fill:#eef2f8;}
+  .track-group:hover .track-name{fill:#475569;}
+</style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="logo">D</div>
+      <div class="titles">
+        <h1>Inventory Stockout Risk Checker</h1>
+        <div class="sub">Weekly stockout &amp; deadstock review · sample data (10 SKUs)</div>
+      </div>
+      <div class="badge">Option 4 · Stockout Runway</div>
+    </div>
+  </div>
+
+  <div class="wrap">
+
+    <!-- SUMMARY -->
+    <div class="summary">
+      <div class="chip">
+        <span class="dot exp"></span>
+        <div class="meta"><div class="num">4</div><div class="lbl">Expedite now</div></div>
+      </div>
+      <div class="chip">
+        <span class="dot hold"></span>
+        <div class="meta"><div class="num">3</div><div class="lbl">Healthy — hold</div></div>
+      </div>
+      <div class="chip">
+        <span class="dot dead"></span>
+        <div class="meta"><div class="num">3</div><div class="lbl">Deadstock — review markdown</div></div>
+      </div>
+    </div>
+
+    <!-- CHART CARD -->
+    <div class="card">
+      <div class="card-head">
+        <h2>Stockout Runway</h2>
+        <p>Each track is one product. The colored bar is how many days of stock you have left at the current sales pace. The flag marks when a reorder placed today would actually arrive. Sorted by urgency — most exposed at the top.</p>
+      </div>
+
+      <!-- LEGEND -->
+      <div class="legend">
+        <div class="legend-item"><span class="lg-bar"></span> Cover bar — days of stock you have</div>
+        <div class="legend-item"><span class="lg-marker"></span> Restock marker — when a reorder arrives</div>
+        <div class="legend-item"><span class="lg-gap"></span> Red gap — days you'd be out of stock</div>
+      </div>
+
+      <!-- ============ MAIN TIMELINE SVG ============ -->
+      <!--
+        Plot geometry:
+          left label column : 0..236
+          plot area         : x0=236  x1=1024   (width 788)
+          axis              : 0..120 days  => px = x0 + days/120*788  (6.5667 px/day)
+          row height        : 46, bars 22 tall
+      -->
+      <div class="chart-scroll">
+      <svg viewBox="0 0 1024 470" role="img" aria-label="Stockout runway timeline for at-risk and healthy SKUs">
+        <defs>
+          <linearGradient id="gExp" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#ef6b6b"/><stop offset="1" stop-color="#dc2626"/>
+          </linearGradient>
+          <linearGradient id="gHold" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#34a866"/><stop offset="1" stop-color="#15803d"/>
+          </linearGradient>
+          <pattern id="hatch" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+            <rect width="8" height="8" fill="#fde7e7"/>
+            <rect width="4" height="8" fill="#f7bcbc"/>
+          </pattern>
+        </defs>
+
+        <!-- ===== Axis grid (every 20 days, 0..120) ===== -->
+        <!-- x0=236, px per day = 788/120 = 6.56667 -->
+        <!-- 0 -->
+        <line class="grid-line major" x1="236"  y1="34" x2="236"  y2="404"/>
+        <text class="axis-label" x="236"  y="26" text-anchor="middle">0</text>
+        <!-- 20 -->
+        <line class="grid-line" x1="367.3" y1="34" x2="367.3" y2="404"/>
+        <text class="axis-label" x="367.3" y="26" text-anchor="middle">20</text>
+        <!-- 40 -->
+        <line class="grid-line" x1="498.7" y1="34" x2="498.7" y2="404"/>
+        <text class="axis-label" x="498.7" y="26" text-anchor="middle">40</text>
+        <!-- 60 -->
+        <line class="grid-line" x1="630"   y1="34" x2="630"   y2="404"/>
+        <text class="axis-label" x="630"   y="26" text-anchor="middle">60</text>
+        <!-- 80 -->
+        <line class="grid-line" x1="761.3" y1="34" x2="761.3" y2="404"/>
+        <text class="axis-label" x="761.3" y="26" text-anchor="middle">80</text>
+        <!-- 100 -->
+        <line class="grid-line" x1="892.7" y1="34" x2="892.7" y2="404"/>
+        <text class="axis-label" x="892.7" y="26" text-anchor="middle">100</text>
+        <!-- 120 -->
+        <line class="grid-line major" x1="1024" y1="34" x2="1024" y2="404"/>
+        <text class="axis-label" x="1018" y="26" text-anchor="end">120</text>
+
+        <!-- axis title -->
+        <text class="axis-title" x="236" y="14" text-anchor="start">Days from today  →</text>
+
+        <!--
+          ROWS (sorted by days-short desc, then by cover):
+          y centers at row top + 11 (bar y), label baseline +16
+          Row 1 SKU-1007  cover 16.4  lead 60  EXPEDITE  short 44   y=44
+          Row 2 SKU-1004  cover 1.2   lead 30  EXPEDITE  short 29   y=90
+          Row 3 SKU-1002  cover 17.5  lead 35  EXPEDITE  short 18   y=136
+          Row 4 SKU-1001  cover 10.7  lead 28  EXPEDITE  short 17   y=182
+          Row 5 SKU-1008  cover 48    lead 28  HOLD      ok         y=228
+          Row 6 SKU-1006  cover 83    lead 14  HOLD      ok         y=274
+          Row 7 SKU-1009  cover 95    lead 20  HOLD      ok         y=320
+          ----- (axis capped at 120; healthy bars within range) -----
+        -->
+
+        <!-- =========================== ROW 1 : SKU-1007 =========================== -->
+        <g class="track-group">
+          <!-- label -->
+          <text class="track-sku"  x="0" y="42">SKU-1007</text>
+          <text class="track-name" x="0" y="56">Glass Meal Prep 3pk</text>
+          <!-- base track -->
+          <rect class="track-base" x="236" y="33" width="788" height="22" rx="5"/>
+          <!-- cover bar: 16.4 days => width 16.4*6.5667=107.7 -->
+          <rect class="bar" x="236" y="33" width="107.7" height="22" rx="5" fill="url(#gExp)"/>
+          <!-- short gap: from cover-end(343.7) to lead marker(236+60*6.5667=630) -->
+          <rect x="343.7" y="33" width="286.3" height="22" rx="5" fill="url(#hatch)" stroke="#f3b4b4" stroke-width="1"/>
+          <!-- cover-end value -->
+          <text class="cover-end-label" x="343.7" y="48" dx="6" fill="#fff" text-anchor="end" dx="-6">16d</text>
+          <!-- short label centered in gap -->
+          <text class="short-label" x="486.8" y="48" text-anchor="middle">44 days short</text>
+          <!-- lead marker at x=630 -->
+          <line class="marker-line" x1="630" y1="28" x2="630" y2="62"/>
+          <polygon points="624,28 636,28 630,35" fill="#0f172a"/>
+          <text class="marker-label" x="630" y="74" text-anchor="middle">restock arrives · day 60</text>
+        </g>
+
+        <!-- =========================== ROW 2 : SKU-1004 =========================== -->
+        <g class="track-group">
+          <text class="track-sku"  x="0" y="88">SKU-1004</text>
+          <text class="track-name" x="0" y="102">Cotton Drawer Organizer</text>
+          <rect class="track-base" x="236" y="79" width="788" height="22" rx="5"/>
+          <!-- cover 1.2 => width 7.9 (tiny sliver) -->
+          <rect class="bar" x="236" y="79" width="7.9" height="22" rx="3" fill="url(#gExp)"/>
+          <!-- gap from 243.9 to lead 30 => 236+30*6.5667=433 -->
+          <rect x="243.9" y="79" width="189.1" height="22" rx="5" fill="url(#hatch)" stroke="#f3b4b4" stroke-width="1"/>
+          <!-- cover value below sliver -->
+          <text class="cover-end-label" x="244" y="94" dx="6" fill="var(--exp)" text-anchor="start">1.2d</text>
+          <text class="short-label" x="372" y="94" text-anchor="middle">29 days short</text>
+          <line class="marker-line" x1="433" y1="74" x2="433" y2="108"/>
+          <polygon points="427,74 439,74 433,81" fill="#0f172a"/>
+          <text class="marker-label" x="433" y="120" text-anchor="middle">restock arrives · day 30</text>
+        </g>
+
+        <!-- =========================== ROW 3 : SKU-1002 =========================== -->
+        <g class="track-group">
+          <text class="track-sku"  x="0" y="134">SKU-1002</text>
+          <text class="track-name" x="0" y="148">Bamboo Storage Bin L</text>
+          <rect class="track-base" x="236" y="125" width="788" height="22" rx="5"/>
+          <!-- cover 17.5 => 114.9 -->
+          <rect class="bar" x="236" y="125" width="114.9" height="22" rx="5" fill="url(#gExp)"/>
+          <!-- gap 350.9 to lead 35 => 236+35*6.5667=465.8 -->
+          <rect x="350.9" y="125" width="114.9" height="22" rx="5" fill="url(#hatch)" stroke="#f3b4b4" stroke-width="1"/>
+          <text class="cover-end-label" x="350.9" y="140" fill="#fff" text-anchor="end" dx="-6">17.5d</text>
+          <text class="short-label" x="408.3" y="140" text-anchor="middle">18 days short</text>
+          <line class="marker-line" x1="465.8" y1="120" x2="465.8" y2="154"/>
+          <polygon points="459.8,120 471.8,120 465.8,127" fill="#0f172a"/>
+          <text class="marker-label" x="465.8" y="166" text-anchor="middle">restock arrives · day 35</text>
+        </g>
+
+        <!-- =========================== ROW 4 : SKU-1001 =========================== -->
+        <g class="track-group">
+          <text class="track-sku"  x="0" y="180">SKU-1001</text>
+          <text class="track-name" x="0" y="194">Bamboo Storage Bin S</text>
+          <rect class="track-base" x="236" y="171" width="788" height="22" rx="5"/>
+          <!-- cover 10.7 => 70.3 -->
+          <rect class="bar" x="236" y="171" width="70.3" height="22" rx="5" fill="url(#gExp)"/>
+          <!-- gap 306.3 to lead 28 => 236+28*6.5667=419.9 -->
+          <rect x="306.3" y="171" width="113.6" height="22" rx="5" fill="url(#hatch)" stroke="#f3b4b4" stroke-width="1"/>
+          <text class="cover-end-label" x="306.3" y="186" fill="#fff" text-anchor="end" dx="-6">10.7d</text>
+          <text class="short-label" x="363.1" y="186" text-anchor="middle">17 days short</text>
+          <line class="marker-line" x1="419.9" y1="166" x2="419.9" y2="200"/>
+          <polygon points="413.9,166 425.9,166 419.9,173" fill="#0f172a"/>
+          <text class="marker-label" x="419.9" y="212" text-anchor="middle">restock arrives · day 28</text>
+        </g>
+
+        <!-- divider between at-risk and healthy -->
+        <line class="grid-line" x1="0" y1="216" x2="1024" y2="216" stroke-dasharray="3 4"/>
+
+        <!-- =========================== ROW 5 : SKU-1008 =========================== -->
+        <g class="track-group">
+          <text class="track-sku"  x="0" y="226">SKU-1008</text>
+          <text class="track-name" x="0" y="240">Linen Closet Divider</text>
+          <rect class="track-base" x="236" y="217" width="788" height="22" rx="5"/>
+          <!-- cover 48 => 315.2 -->
+          <rect class="bar" x="236" y="217" width="315.2" height="22" rx="5" fill="url(#gHold)"/>
+          <text class="cover-end-label" x="551.2" y="232" fill="#fff" text-anchor="end" dx="-6">48d cover</text>
+          <!-- lead 28 => 419.9 (marker sits inside cover => safe) -->
+          <line class="marker-line" x1="419.9" y1="212" x2="419.9" y2="246" stroke="#0f172a" stroke-opacity="0.55"/>
+          <polygon points="413.9,212 425.9,212 419.9,219" fill="#0f172a" fill-opacity="0.55"/>
+          <text class="marker-label" x="419.9" y="258" text-anchor="middle" fill="#475569">restock · day 28</text>
+        </g>
+
+        <!-- =========================== ROW 6 : SKU-1006 =========================== -->
+        <g class="track-group">
+          <text class="track-sku"  x="0" y="272">SKU-1006</text>
+          <text class="track-name" x="0" y="286">Magnetic Spice Labels</text>
+          <rect class="track-base" x="236" y="263" width="788" height="22" rx="5"/>
+          <!-- cover 83 => 545.0 -->
+          <rect class="bar" x="236" y="263" width="545" height="22" rx="5" fill="url(#gHold)"/>
+          <text class="cover-end-label" x="781" y="278" fill="#fff" text-anchor="end" dx="-6">83d cover</text>
+          <!-- lead 14 => 327.9 -->
+          <line class="marker-line" x1="327.9" y1="258" x2="327.9" y2="292" stroke="#0f172a" stroke-opacity="0.55"/>
+          <polygon points="321.9,258 333.9,258 327.9,265" fill="#0f172a" fill-opacity="0.55"/>
+          <text class="marker-label" x="327.9" y="304" text-anchor="middle" fill="#475569">restock · day 14</text>
+        </g>
+
+        <!-- =========================== ROW 7 : SKU-1009 =========================== -->
+        <g class="track-group">
+          <text class="track-sku"  x="0" y="318">SKU-1009</text>
+          <text class="track-name" x="0" y="332">Compostable Mailer 50pk</text>
+          <rect class="track-base" x="236" y="309" width="788" height="22" rx="5"/>
+          <!-- cover 95 => exceeds 120 cap visually but 95<120 => 623.8 -->
+          <rect class="bar" x="236" y="309" width="623.8" height="22" rx="5" fill="url(#gHold)"/>
+          <text class="cover-end-label" x="859.8" y="324" fill="#fff" text-anchor="end" dx="-6">95d cover</text>
+          <!-- lead 20 => 367.3 -->
+          <line class="marker-line" x1="367.3" y1="304" x2="367.3" y2="338" stroke="#0f172a" stroke-opacity="0.55"/>
+          <polygon points="361.3,304 373.3,304 367.3,311" fill="#0f172a" fill-opacity="0.55"/>
+          <text class="marker-label" x="367.3" y="350" text-anchor="middle" fill="#475569">restock · day 20</text>
+        </g>
+
+        <!-- bottom axis baseline ticks repeated for readability -->
+        <line class="grid-line major" x1="236" y1="404" x2="1024" y2="404"/>
+        <text class="axis-label" x="236"  y="418" text-anchor="middle">0</text>
+        <text class="axis-label" x="367.3" y="418" text-anchor="middle">20</text>
+        <text class="axis-label" x="498.7" y="418" text-anchor="middle">40</text>
+        <text class="axis-label" x="630"   y="418" text-anchor="middle">60</text>
+        <text class="axis-label" x="761.3" y="418" text-anchor="middle">80</text>
+        <text class="axis-label" x="892.7" y="418" text-anchor="middle">100</text>
+        <text class="axis-label" x="1018"  y="418" text-anchor="end">120</text>
+        <text class="axis-title" x="630" y="436" text-anchor="middle">Days of stock remaining vs. when a reorder would land</text>
+      </svg>
+      </div>
+
+      <!-- DEADSTOCK LANE -->
+      <div class="section-divider">Off the chart — far more cover than the 120-day view</div>
+      <div class="deadlane">
+        <div class="deadlane-head">
+          <span class="tag">DEADSTOCK</span>
+          <span class="desc">Plenty of cover — review for markdown, not reorder</span>
+        </div>
+        <div class="deadrow">
+          <div class="dr-name"><b>SKU-1005</b> Reusable Produce Bag Set <span>· lead 45d</span></div>
+          <div class="dr-cover">no sales<small>cover can't be computed</small></div>
+          <div class="dr-action">Review for markdown</div>
+        </div>
+        <div class="deadrow">
+          <div class="dr-name"><b>SKU-1003</b> Silicone Travel Bottle Set <span>· lead 21d</span></div>
+          <div class="dr-cover">587 days<small>~19 months of stock</small></div>
+          <div class="dr-action">Review for markdown</div>
+        </div>
+        <div class="deadrow">
+          <div class="dr-name"><b>SKU-1010</b> Holiday Gift Wrap Bundle <span>· lead 50d</span></div>
+          <div class="dr-cover">1,791 days<small>~4.9 years of stock</small></div>
+          <div class="dr-action">Review for markdown</div>
+        </div>
+      </div>
+
+      <!-- CAPTION -->
+      <div class="caption">
+        <span class="ico">i</span>
+        <span>If the bar ends before the restock marker, you run out before new stock can arrive. The red gap is how many days you'd be sold out — order those SKUs today (or rush them) to close it.</span>
+      </div>
+    </div>
+
+    <div class="footnote">Sample data · 10 SKUs · days_cover = days of stock left at current pace · lead_days = days for a reorder to arrive</div>
+
+  </div>
+
+<script>
+  // Tiny vanilla hover: dim other tracks to focus the hovered one.
+  (function(){
+    var groups = Array.prototype.slice.call(document.querySelectorAll('.track-group'));
+    groups.forEach(function(g){
+      g.addEventListener('mouseenter', function(){
+        groups.forEach(function(o){ if(o!==g) o.style.opacity = '0.38'; });
+      });
+      g.addEventListener('mouseleave', function(){
+        groups.forEach(function(o){ o.style.opacity = '1'; });
+      });
+    });
+  })();
+</script>
+
+</body>
+</html>

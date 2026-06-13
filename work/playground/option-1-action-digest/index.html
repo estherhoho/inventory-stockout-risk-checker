@@ -1,0 +1,1530 @@
+<!-- Option 1: Action Digest -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inventory Stockout Risk Checker — Action Digest</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #FAFAFA;
+      --surface: #FFFFFF;
+      --border: #E5E7EB;
+      --border-light: #F3F4F6;
+      --text-primary: #0F172A;
+      --text-secondary: #475569;
+      --text-muted: #94A3B8;
+      --expedite: #EF4444;
+      --expedite-bg: #FEF2F2;
+      --expedite-border: #FECACA;
+      --amber: #F59E0B;
+      --amber-bg: #FFFBEB;
+      --amber-border: #FDE68A;
+      --emerald: #10B981;
+      --emerald-bg: #ECFDF5;
+      --emerald-border: #A7F3D0;
+      --purple: #7C3AED;
+      --purple-bg: #F5F3FF;
+      --purple-border: #DDD6FE;
+      --radius: 8px;
+      --radius-sm: 4px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+      padding-bottom: 80px;
+    }
+
+    /* ── LAYOUT ── */
+    .container {
+      width: 100%;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 0 16px;
+    }
+
+    /* ── TOP BAR ── */
+    .topbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .topbar-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .topbar-brand {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+    }
+    .topbar-brand span {
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    /* ── UPLOAD STATUS BAR ── */
+    .upload-bar {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 16px 0 0;
+    }
+    .upload-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .upload-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--emerald);
+      flex-shrink: 0;
+    }
+    .upload-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+    .upload-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .btn-upload {
+      background: #F1F5F9;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .btn-upload:hover { background: #E2E8F0; }
+
+    /* ── PAGE HEADER ── */
+    .page-header {
+      padding: 24px 0 8px;
+    }
+    .page-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+    .page-date {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* ── SUMMARY HERO ── */
+    .summary-hero {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin: 16px 0 0;
+    }
+    .summary-headline {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -0.02em;
+      margin-bottom: 14px;
+    }
+    .metric-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 20px;
+      padding: 5px 11px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid;
+    }
+    .pill-neutral {
+      background: #F1F5F9;
+      border-color: #CBD5E1;
+      color: var(--text-secondary);
+    }
+    .pill-expedite {
+      background: var(--expedite-bg);
+      border-color: var(--expedite-border);
+      color: var(--expedite);
+    }
+    .pill-dead {
+      background: var(--purple-bg);
+      border-color: var(--purple-border);
+      color: var(--purple);
+    }
+    .pill-cash {
+      background: var(--amber-bg);
+      border-color: var(--amber-border);
+      color: #92400E;
+    }
+
+    /* ── DATA QUALITY ── */
+    .dq-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin: 12px 0 0;
+      overflow: hidden;
+    }
+    .dq-header {
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+    }
+    .dq-header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .dq-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .dq-subtitle {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .dq-chevron {
+      font-size: 11px;
+      color: var(--text-muted);
+      transition: transform 0.2s;
+    }
+    .dq-chevron.open { transform: rotate(180deg); }
+    .dq-body {
+      display: none;
+      border-top: 1px solid var(--border-light);
+      padding: 12px 14px;
+    }
+    .dq-body.open { display: block; }
+    .dq-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 16px;
+      margin-bottom: 10px;
+    }
+    .dq-field {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+    }
+    .dq-check { color: var(--emerald); font-weight: 700; }
+    .dq-miss { color: var(--text-muted); }
+    .dq-warn {
+      background: var(--amber-bg);
+      border: 1px solid var(--amber-border);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      font-size: 12px;
+      color: #78350F;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+    .dq-warn-icon { flex-shrink: 0; margin-top: 1px; }
+
+    /* ── SECTION HEADER ── */
+    .section-header {
+      padding: 20px 0 10px;
+    }
+    .section-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+    }
+    .section-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* ── ACTION LIST ── */
+    .action-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .action-item {
+      border-bottom: 1px solid var(--border-light);
+    }
+    .action-item:last-child { border-bottom: none; }
+
+    .action-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 13px 14px;
+      cursor: pointer;
+      transition: background 0.12s;
+      user-select: none;
+    }
+    .action-row:hover { background: #F8FAFC; }
+    .action-row.expanded { background: #F8FAFC; }
+
+    .action-num {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #F1F5F9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      flex-shrink: 0;
+    }
+    .action-badge {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      padding: 3px 7px;
+      border-radius: 3px;
+      flex-shrink: 0;
+      border-left: 3px solid;
+    }
+    .badge-expedite {
+      background: var(--expedite-bg);
+      color: var(--expedite);
+      border-left-color: var(--expedite);
+    }
+    .badge-hold {
+      background: var(--emerald-bg);
+      color: #065F46;
+      border-left-color: var(--emerald);
+    }
+    .badge-dead {
+      background: var(--purple-bg);
+      color: var(--purple);
+      border-left-color: var(--purple);
+    }
+    .badge-watch {
+      background: #F1F5F9;
+      color: var(--text-secondary);
+      border-left-color: #94A3B8;
+    }
+
+    .action-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .action-sku {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+    .action-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .action-metric {
+      font-size: 12px;
+      color: var(--text-secondary);
+      text-align: right;
+      flex-shrink: 0;
+    }
+    .action-metric.urgent { color: var(--expedite); font-weight: 600; }
+    .action-chevron {
+      font-size: 11px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+      transition: transform 0.2s;
+    }
+    .action-chevron.open { transform: rotate(180deg); }
+
+    /* ── ACTION DETAIL (expanded) ── */
+    .action-detail {
+      display: none;
+      border-top: 1px solid var(--border-light);
+      background: #FAFCFF;
+      padding: 14px 14px 14px 48px;
+    }
+    .action-detail.open { display: block; }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 16px;
+      margin-bottom: 12px;
+    }
+    .detail-field {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .detail-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .detail-value {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .detail-value.red { color: var(--expedite); }
+    .detail-value.amber { color: #92400E; }
+
+    .lead-time-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .lead-time-input {
+      width: 36px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 1px 4px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      text-align: center;
+      background: var(--surface);
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .lead-time-input:focus {
+      border-color: #6366F1;
+      box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
+    }
+    .lead-time-suffix {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .edit-hint {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-left: 4px;
+    }
+
+    .detail-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .btn-primary {
+      background: var(--text-primary);
+      color: #FFFFFF;
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 7px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    .btn-primary:hover { background: #1E293B; }
+    .btn-ghost {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 7px 14px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-family: inherit;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .btn-ghost:hover { background: #F1F5F9; border-color: #CBD5E1; }
+
+    /* ── SUPPLIER DRAFT PANEL ── */
+    .draft-panel {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin: 12px 0 0;
+      overflow: hidden;
+    }
+    .draft-panel.open { display: block; }
+    .draft-panel-header {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border-light);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .draft-panel-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .draft-panel-sku {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+    .draft-panel-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .draft-template-tag {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      padding: 3px 7px;
+      border-radius: 3px;
+      background: var(--expedite-bg);
+      color: var(--expedite);
+      border: 1px solid var(--expedite-border);
+    }
+    .draft-switch {
+      font-size: 12px;
+      color: #6366F1;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      background: none;
+      border: none;
+      font-family: inherit;
+      padding: 0;
+    }
+    .draft-switch:hover { color: #4F46E5; }
+    .draft-body {
+      padding: 14px;
+    }
+    .draft-textarea {
+      width: 100%;
+      min-height: 160px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      font-size: 13px;
+      font-family: inherit;
+      color: var(--text-primary);
+      line-height: 1.6;
+      background: #F8FAFC;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .draft-textarea:focus {
+      border-color: #6366F1;
+      background: var(--surface);
+      box-shadow: 0 0 0 2px rgba(99,102,241,0.1);
+    }
+    .draft-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    .draft-footer-note {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .draft-footer-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .btn-copy {
+      background: var(--expedite);
+      color: #FFFFFF;
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 7px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.15s;
+    }
+    .btn-copy:hover { background: #DC2626; }
+    .copy-feedback {
+      font-size: 12px;
+      color: var(--emerald);
+      font-weight: 500;
+      display: none;
+    }
+    .copy-feedback.show { display: inline; }
+
+    /* ── DEADSTOCK SECTION ── */
+    .collapsible-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin: 12px 0 0;
+      overflow: hidden;
+    }
+    .coll-header {
+      padding: 13px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+    }
+    .coll-header:hover { background: #F8FAFC; }
+    .coll-header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .coll-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .coll-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 20px;
+    }
+    .coll-chevron {
+      font-size: 11px;
+      color: var(--text-muted);
+      transition: transform 0.2s;
+    }
+    .coll-chevron.open { transform: rotate(180deg); }
+    .coll-body {
+      display: none;
+      border-top: 1px solid var(--border-light);
+    }
+    .coll-body.open { display: block; }
+
+    /* ── DEAD TABLE ── */
+    .dead-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .dead-table th {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      padding: 8px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-light);
+      background: #F8FAFC;
+    }
+    .dead-table td {
+      padding: 11px 14px;
+      font-size: 13px;
+      border-bottom: 1px solid var(--border-light);
+      vertical-align: top;
+    }
+    .dead-table tr:last-child td { border-bottom: none; }
+    .dead-table tr:hover td { background: #F8FAFC; }
+    .td-sku {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .td-name { font-weight: 500; color: var(--text-primary); }
+    .td-cover { color: var(--purple); font-weight: 600; }
+    .td-cash { font-weight: 600; color: var(--text-secondary); }
+    .dead-caveat {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 600;
+      background: var(--amber-bg);
+      border: 1px solid var(--amber-border);
+      color: #92400E;
+      padding: 1px 6px;
+      border-radius: 3px;
+      margin-top: 3px;
+    }
+
+    /* ── FORMULA ACCORDION ── */
+    .formula-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin: 12px 0 0;
+      overflow: hidden;
+    }
+    .formula-header {
+      padding: 13px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+    }
+    .formula-header:hover { background: #F8FAFC; }
+    .formula-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .formula-chevron {
+      font-size: 11px;
+      color: var(--text-muted);
+      transition: transform 0.2s;
+    }
+    .formula-chevron.open { transform: rotate(180deg); }
+    .formula-body {
+      display: none;
+      border-top: 1px solid var(--border-light);
+      padding: 14px;
+    }
+    .formula-body.open { display: block; }
+    .formula-item {
+      margin-bottom: 12px;
+    }
+    .formula-item:last-child { margin-bottom: 0; }
+    .formula-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .formula-code {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      background: #F1F5F9;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      color: var(--text-primary);
+      white-space: pre-wrap;
+    }
+    .formula-note {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    /* ── FOOTER SPACER ── */
+    .footer-spacer { height: 32px; }
+
+    /* ── BACK BUTTON ── */
+    .back-btn {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--text-primary);
+      color: #FFFFFF;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 9px 18px;
+      border-radius: 20px;
+      box-shadow: 0 4px 12px rgba(15,23,42,0.25);
+      white-space: nowrap;
+      z-index: 200;
+      transition: background 0.15s, transform 0.15s;
+    }
+    .back-btn:hover {
+      background: #1E293B;
+      transform: translateX(-50%) translateY(-1px);
+    }
+
+    /* ── DESKTOP OVERRIDES ── */
+    @media (min-width: 1024px) {
+      body { font-size: 14px; }
+      .container { padding: 0 24px; }
+      .page-title { font-size: 24px; }
+      .summary-headline { font-size: 20px; }
+      .action-detail { padding-left: 52px; }
+      .detail-grid { grid-template-columns: repeat(3, 1fr); }
+      .draft-textarea { min-height: 180px; }
+      .dq-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    /* ── HOLD GROUP DIVIDER ── */
+    .list-divider {
+      background: #F8FAFC;
+      padding: 6px 14px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-light);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- STICKY TOP BAR -->
+  <div class="topbar">
+    <div class="container">
+      <div class="topbar-inner">
+        <div class="topbar-brand">Inventory Stockout Risk <span>/ Option 1: Action Digest</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <!-- UPLOAD STATUS BAR -->
+    <div class="upload-bar">
+      <div class="upload-status">
+        <div class="upload-dot"></div>
+        <div>
+          <div class="upload-label">Sample data loaded</div>
+          <div class="upload-meta">inventory-sample.csv · 10 SKUs · Analyzed Jun 5, 2026</div>
+        </div>
+      </div>
+      <button class="btn-upload">↑ Upload your CSV</button>
+    </div>
+
+    <!-- PAGE HEADER -->
+    <div class="page-header">
+      <div class="page-title">Stockout Risk Report</div>
+      <div class="page-date">Thursday, June 5, 2026 · Based on 30-day and 90-day velocity</div>
+    </div>
+
+    <!-- SUMMARY HERO -->
+    <div class="summary-hero">
+      <div class="summary-headline">4 SKUs need action this week</div>
+      <div class="metric-pills">
+        <span class="pill pill-neutral">
+          <span>📦</span> 10 SKUs analyzed
+        </span>
+        <span class="pill pill-expedite">
+          <span>🔴</span> 4 Expedite now
+        </span>
+        <span class="pill pill-dead">
+          <span>🔒</span> 3 Deadstock candidates
+        </span>
+        <span class="pill pill-cash">
+          <span>💵</span> $2,296 tied up
+        </span>
+      </div>
+    </div>
+
+    <!-- DATA QUALITY PANEL -->
+    <div class="dq-section">
+      <div class="dq-header" onclick="toggleDQ(this)">
+        <div class="dq-header-left">
+          <div>
+            <div class="dq-title">Data Quality</div>
+            <div class="dq-subtitle">Analyzed with 4 of 6 optional fields</div>
+          </div>
+        </div>
+        <span class="dq-chevron">▾</span>
+      </div>
+      <div class="dq-body">
+        <div class="dq-grid">
+          <div class="dq-field"><span class="dq-check">✓</span> unit_cost</div>
+          <div class="dq-field"><span class="dq-check">✓</span> vendor</div>
+          <div class="dq-field"><span class="dq-check">✓</span> incoming_units</div>
+          <div class="dq-field"><span class="dq-check">✓</span> committed_units</div>
+          <div class="dq-field"><span class="dq-miss">—</span> <span style="color:var(--text-muted)">reorder_multiple</span></div>
+          <div class="dq-field"><span class="dq-miss">—</span> <span style="color:var(--text-muted)">category</span></div>
+        </div>
+        <div style="margin-bottom: 8px;">
+          <span style="font-size:11px; color:var(--text-muted);">✅ Estimated reorder cash enabled (unit_cost present) &nbsp;·&nbsp; ✅ Committed units subtracted from available inventory</span>
+        </div>
+        <div class="dq-warn">
+          <span class="dq-warn-icon">⚠️</span>
+          <span><strong>Verify net of returns.</strong> Make sure <code style="font-family:monospace; background:#FDE68A; padding:0 3px; border-radius:2px;">units_sold_30d</code> and <code style="font-family:monospace; background:#FDE68A; padding:0 3px; border-radius:2px;">units_sold_90d</code> are NET of returns. Gross sales velocity will overstate risk and may trigger unnecessary expedites.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ACTION LIST -->
+    <div class="section-header">
+      <div class="section-title">This week's action items</div>
+      <div class="section-subtitle">Click any item to see details and draft a supplier email</div>
+    </div>
+
+    <div class="action-list">
+
+      <!-- EXPEDITE GROUP DIVIDER -->
+      <div class="list-divider">Expedite — Act within 24–48 hours</div>
+
+      <!-- ACTION 1: SKU-1004 -->
+      <div class="action-item">
+        <div class="action-row" onclick="toggleAction('a1')">
+          <div class="action-num">1</div>
+          <div class="action-badge badge-expedite">EXPEDITE</div>
+          <div class="action-info">
+            <div class="action-sku">SKU-1004</div>
+            <div class="action-name">Cotton Drawer Organizer</div>
+          </div>
+          <div class="action-metric urgent">1.2 days</div>
+          <div class="action-chevron" id="chev-a1">▾</div>
+        </div>
+        <div class="action-detail" id="detail-a1">
+          <div class="detail-grid">
+            <div class="detail-field">
+              <div class="detail-label">Days of Cover</div>
+              <div class="detail-value red">1.2 days</div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Days Short</div>
+              <div class="detail-value red">29 days short</div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Lead Time</div>
+              <div class="detail-value">
+                <div class="lead-time-wrap">
+                  <input class="lead-time-input" type="number" value="30" min="1" max="365" title="Edit lead time" />
+                  <span class="lead-time-suffix">days</span>
+                  <span class="edit-hint">✎ editable</span>
+                </div>
+              </div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Reorder Qty</div>
+              <div class="detail-value">108 units</div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Est. Cash Required</div>
+              <div class="detail-value amber">$513</div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Vendor</div>
+              <div class="detail-value">Northstar Home</div>
+            </div>
+          </div>
+          <div class="detail-actions">
+            <button class="btn-primary" onclick="openDraft('a1', 'SKU-1004', 'Cotton Drawer Organizer', 'Northstar Home', 108, 30)">Draft supplier email</button>
+            <button class="btn-ghost">Copy SKU</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ACTION 2: SKU-1001 -->
+      <div class="action-item">
+        <div class="action-row" onclick="toggleAction('a2')">
+          <div class="action-num">2</div>
+          <div class="action-badge badge-expedite">EXPEDITE</div>
+          <div class="action-info">
+            <div class="action-sku">SKU-1001</div>
+            <div class="action-name">Bamboo Storage Bin - Small</div>
+          </div>
+          <div class="action-metric urgent">10.7 days</div>
+          <div class="action-chevron" id="chev-a2">▾</div>
+        </div>
+        <div class="action-detail" id="detail-a2">
+          <div class="detail-grid">
+            <div class="detail-field">
+              <div class="detail-label">Days of Cover</div>
+              <div class="detail-value red">10.7 days</div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Days Short</div>
+              <div class="detail-value red">17 days short</div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Lead Time</div>
+              <div class="detail-value">
+                <div class="lead-time-wrap">
+                  <input class="lead-time-input" type="number" value="28" min="1" max="365" title="Edit lead time" />
+                  <span class="lead-time-suffix">days</span>
+                  <span class="edit-hint">✎ editable</span>
+                </div>
+              </div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Reorder Qty</div>
+              <div class="detail-value">144 units</div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Est. Cash Required</div>
+              <div class="detail-value amber">$1,224</div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Vendor</div>
+              <div class="detail-value">Northstar Home</div>
+            </div>
+          </div>
+          <div class="detail-actions">
+            <button class="btn-primary" onclick="openDraft('a2', 'SKU-1001', 'Bamboo Storage Bin - Small', 'Northstar Home', 144, 28)">Draft supplier email</button>
+            <button class="btn-ghost">Copy SKU</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ACTION 3: SKU-1007 -->
+      <div class="action-item">
+        <div class="action-row" onclick="toggleAction('a3')">
+          <div class="action-num">3</div>
+          <div class="action-badge badge-expedite">EXPEDITE</div>
+          <div class="action-info">
+            <div class="action-sku">SKU-1007</div>
+            <div class="action-name">Glass Meal Prep Container 3pk</div>
+          </div>
+          <div class="action-metric urgent">16.4 days</div>
+          <div class="action-chevron" id="chev-a3">▾</div>
+        </div>
+        <div class="action-detail" id="detail-a3">
+          <div class="detail-grid">
+            <div class="detail-field">
+              <div class="detail-label">Days of Cover</div>
+              <div class="detail-value red">16.4 days</div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Days Short</div>
+              <div class="detail-value red">44 days short</div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Lead Time</div>
+              <div class="detail-value">
+                <div class="lead-time-wrap">
+                  <input class="lead-time-input" type="number" value="60" min="1" max="365" title="Edit lead time" />
+                  <span class="lead-time-suffix">days</span>
+                  <span class="edit-hint">✎ editable</span>
+                </div>
+              </div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Reorder Qty</div>
+              <div class="detail-value">18 units</div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Est. Cash Required</div>
+              <div class="detail-value amber">$194</div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Vendor</div>
+              <div class="detail-value">Blue Ridge Goods</div>
+            </div>
+          </div>
+          <div class="detail-actions">
+            <button class="btn-primary" onclick="openDraft('a3', 'SKU-1007', 'Glass Meal Prep Container 3pk', 'Blue Ridge Goods', 18, 60)">Draft supplier email</button>
+            <button class="btn-ghost">Copy SKU</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ACTION 4: SKU-1002 -->
+      <div class="action-item">
+        <div class="action-row" onclick="toggleAction('a4')">
+          <div class="action-num">4</div>
+          <div class="action-badge badge-expedite">EXPEDITE</div>
+          <div class="action-info">
+            <div class="action-sku">SKU-1002</div>
+            <div class="action-name">Bamboo Storage Bin - Large</div>
+          </div>
+          <div class="action-metric urgent">17.5 days</div>
+          <div class="action-chevron" id="chev-a4">▾</div>
+        </div>
+        <div class="action-detail" id="detail-a4">
+          <div class="detail-grid">
+            <div class="detail-field">
+              <div class="detail-label">Days of Cover</div>
+              <div class="detail-value red">17.5 days</div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Days Short</div>
+              <div class="detail-value red">18 days short</div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Lead Time</div>
+              <div class="detail-value">
+                <div class="lead-time-wrap">
+                  <input class="lead-time-input" type="number" value="36" min="1" max="365" title="Edit lead time" />
+                  <span class="lead-time-suffix">days</span>
+                  <span class="edit-hint">✎ editable</span>
+                </div>
+              </div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Reorder Qty</div>
+              <div class="detail-value">120 units</div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Est. Cash Required</div>
+              <div class="detail-value amber">$1,470</div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Vendor</div>
+              <div class="detail-value">Northstar Home</div>
+            </div>
+          </div>
+          <div class="detail-actions">
+            <button class="btn-primary" onclick="openDraft('a4', 'SKU-1002', 'Bamboo Storage Bin - Large', 'Northstar Home', 120, 36)">Draft supplier email</button>
+            <button class="btn-ghost">Copy SKU</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- HOLD GROUP DIVIDER -->
+      <div class="list-divider">Hold — Stable, no action needed</div>
+
+      <!-- ACTION 5: SKU-1008 -->
+      <div class="action-item">
+        <div class="action-row" onclick="toggleAction('a5')">
+          <div class="action-num">5</div>
+          <div class="action-badge badge-hold">HOLD</div>
+          <div class="action-info">
+            <div class="action-sku">SKU-1008</div>
+            <div class="action-name">Linen Closet Divider</div>
+          </div>
+          <div class="action-metric">48 days</div>
+          <div class="action-chevron" id="chev-a5">▾</div>
+        </div>
+        <div class="action-detail" id="detail-a5">
+          <div class="detail-grid">
+            <div class="detail-field">
+              <div class="detail-label">Days of Cover</div>
+              <div class="detail-value">48 days</div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">On-Hand</div>
+              <div class="detail-value">0 units</div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Incoming</div>
+              <div class="detail-value" style="color:var(--emerald)">40 units inbound</div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Vendor</div>
+              <div class="detail-value">Northstar Home</div>
+            </div>
+          </div>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">Inventory is 0 on-hand but 40 units are incoming — sufficient coverage. Monitor for delivery delays.</div>
+        </div>
+      </div>
+
+      <!-- ACTION 6: SKU-1006 -->
+      <div class="action-item">
+        <div class="action-row" onclick="toggleAction('a6')">
+          <div class="action-num">6</div>
+          <div class="action-badge badge-hold">HOLD</div>
+          <div class="action-info">
+            <div class="action-sku">SKU-1006</div>
+            <div class="action-name">Magnetic Spice Labels</div>
+          </div>
+          <div class="action-metric">83 days</div>
+          <div class="action-chevron" id="chev-a6">▾</div>
+        </div>
+        <div class="action-detail" id="detail-a6">
+          <div class="detail-grid">
+            <div class="detail-field">
+              <div class="detail-label">Days of Cover</div>
+              <div class="detail-value">83.3 days</div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Vendor</div>
+              <div class="detail-value">LabelWorks</div>
+            </div>
+          </div>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">Healthy stock. No action needed in the next 60 days.</div>
+        </div>
+      </div>
+
+      <!-- ACTION 7: SKU-1009 -->
+      <div class="action-item">
+        <div class="action-row" onclick="toggleAction('a7')">
+          <div class="action-num">7</div>
+          <div class="action-badge badge-hold">HOLD</div>
+          <div class="action-info">
+            <div class="action-sku">SKU-1009</div>
+            <div class="action-name">Compostable Shipping Mailer 50pk</div>
+          </div>
+          <div class="action-metric">95 days</div>
+          <div class="action-chevron" id="chev-a7">▾</div>
+        </div>
+        <div class="action-detail" id="detail-a7">
+          <div class="detail-grid">
+            <div class="detail-field">
+              <div class="detail-label">Days of Cover</div>
+              <div class="detail-value">95 days</div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Vendor</div>
+              <div class="detail-value">PackRight</div>
+            </div>
+          </div>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">Well-stocked. No action needed this quarter.</div>
+        </div>
+      </div>
+
+      <!-- ACTION 8: SKU-1005 -->
+      <div class="action-item">
+        <div class="action-row" onclick="toggleAction('a8')">
+          <div class="action-num">8</div>
+          <div class="action-badge badge-watch">NO SALES</div>
+          <div class="action-info">
+            <div class="action-sku">SKU-1005</div>
+            <div class="action-name">Reusable Produce Bag Set</div>
+          </div>
+          <div class="action-metric">310 units</div>
+          <div class="action-chevron" id="chev-a8">▾</div>
+        </div>
+        <div class="action-detail" id="detail-a8">
+          <div class="detail-grid">
+            <div class="detail-field">
+              <div class="detail-label">On-Hand</div>
+              <div class="detail-value">310 units</div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Recent Sales</div>
+              <div class="detail-value" style="color:var(--amber)">No recent sales</div>
+            </div>
+            <div class="detail-field">
+              <div class="detail-label">Vendor</div>
+              <div class="detail-value">Greenline Supply</div>
+            </div>
+          </div>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">No sales velocity in the analysis window. Velocity-based cover cannot be calculated. Holding — investigate demand before reordering.</div>
+        </div>
+      </div>
+
+    </div>
+    <!-- END ACTION LIST -->
+
+    <!-- SUPPLIER DRAFT PANEL -->
+    <div class="draft-panel" id="draftPanel">
+      <div class="draft-panel-header">
+        <div>
+          <div class="draft-panel-title">Supplier Email Draft</div>
+          <div class="draft-panel-sku" id="draftSku">SKU-1004 · Cotton Drawer Organizer</div>
+        </div>
+        <div class="draft-panel-meta">
+          <span class="draft-template-tag" id="draftTag">URGENT EXPEDITE</span>
+          <button class="draft-switch" id="switchBtn" onclick="switchTemplate()">Switch to standard reorder</button>
+        </div>
+      </div>
+      <div class="draft-body">
+        <textarea class="draft-textarea" id="draftTextarea" spellcheck="false"></textarea>
+        <div class="draft-footer">
+          <span class="draft-footer-note" id="copyFeedback" style="color:var(--text-muted);">Edit before sending. Verify lead time and quantity with your vendor.</span>
+          <div class="draft-footer-actions">
+            <span class="copy-feedback" id="copySuccess">Copied!</span>
+            <button class="btn-copy" onclick="copyDraft()">Copy to clipboard</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DEADSTOCK CANDIDATES -->
+    <div class="collapsible-section" style="margin-top:20px;">
+      <div class="coll-header" onclick="toggleColl('dead')">
+        <div class="coll-header-left">
+          <div class="coll-title">Deadstock Candidates</div>
+          <span class="coll-badge" style="background:var(--purple-bg); color:var(--purple);">3 SKUs · $2,296 tied up</span>
+        </div>
+        <span class="coll-chevron" id="chev-dead">▾</span>
+      </div>
+      <div class="coll-body" id="coll-dead">
+        <table class="dead-table">
+          <thead>
+            <tr>
+              <th>SKU</th>
+              <th>Product</th>
+              <th>Cover</th>
+              <th>Cash Tied Up</th>
+              <th>Vendor</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="td-sku">SKU-1003</td>
+              <td>
+                <div class="td-name">Silicone Travel Bottle Set</div>
+              </td>
+              <td class="td-cover">587 days</td>
+              <td class="td-cash">$744</td>
+              <td style="color:var(--text-secondary);">Blue Ridge Goods</td>
+            </tr>
+            <tr>
+              <td class="td-sku">SKU-1005</td>
+              <td>
+                <div class="td-name">Reusable Produce Bag Set</div>
+                <div style="font-size:11px; color:var(--amber); margin-top:2px;">No recent sales — velocity unknown</div>
+              </td>
+              <td class="td-cover">—</td>
+              <td class="td-cash">—</td>
+              <td style="color:var(--text-secondary);">Greenline Supply</td>
+            </tr>
+            <tr>
+              <td class="td-sku">SKU-1010</td>
+              <td>
+                <div class="td-name">Holiday Gift Wrap Bundle</div>
+                <span class="dead-caveat">OFF-SEASON — review after Oct</span>
+              </td>
+              <td class="td-cover">1,791 days</td>
+              <td class="td-cash">$870</td>
+              <td style="color:var(--text-secondary);">Seasonal House</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="padding: 10px 14px; font-size: 12px; color: var(--text-muted); border-top: 1px solid var(--border-light);">
+          Consider markdowns, bundling, or pausing reorders for items above 180 days of cover. Confirm SKU-1010 seasonality before acting.
+        </div>
+      </div>
+    </div>
+
+    <!-- FORMULA / CAVEAT ACCORDION -->
+    <div class="formula-section">
+      <div class="formula-header" onclick="toggleFormula()">
+        <div class="formula-title">Formulas &amp; Methodology</div>
+        <span class="formula-chevron" id="formulaChev">▾</span>
+      </div>
+      <div class="formula-body" id="formulaBody">
+        <div class="formula-item">
+          <div class="formula-label">Days of Cover</div>
+          <div class="formula-code">(on_hand + incoming_units - committed_units) ÷ daily_velocity</div>
+          <div class="formula-note">daily_velocity = units_sold_30d ÷ 30. Falls back to 90d velocity if 30d is zero.</div>
+        </div>
+        <div class="formula-item">
+          <div class="formula-label">Days Short</div>
+          <div class="formula-code">lead_time_days - days_of_cover</div>
+          <div class="formula-note">Positive means you will stockout before new stock arrives.</div>
+        </div>
+        <div class="formula-item">
+          <div class="formula-label">Reorder Quantity</div>
+          <div class="formula-code">daily_velocity × (lead_time + safety_buffer_days)</div>
+          <div class="formula-note">Safety buffer defaults to 14 days. Uses reorder_multiple if provided.</div>
+        </div>
+        <div class="formula-item">
+          <div class="formula-label">Estimated Cash Required</div>
+          <div class="formula-code">reorder_qty × unit_cost</div>
+          <div class="formula-note">Only shown when unit_cost is present in your CSV. Does not include freight or duties.</div>
+        </div>
+        <div class="formula-item">
+          <div class="formula-label">Deadstock Threshold</div>
+          <div class="formula-code">days_of_cover &gt; 180 days</div>
+          <div class="formula-note">Flagged as HIGH if over 365 days. Off-season items are caveated, not auto-flagged for action.</div>
+        </div>
+        <div style="margin-top: 10px; padding: 10px; background:#F8FAFC; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:12px; color:var(--text-secondary);">
+          <strong>Data input reminder:</strong> Velocity columns must be NET of returns. Gross sales inflate velocity and understate stockout risk. If you track returns separately, subtract them from <code style="font-family:monospace;">units_sold_30d</code> and <code style="font-family:monospace;">units_sold_90d</code> before uploading.
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-spacer"></div>
+
+  </div><!-- /.container -->
+
+  <!-- FLOATING BACK BUTTON -->
+  <a class="back-btn" href="../index.html">← Back to gallery</a>
+
+  <script>
+    // ── TOGGLE ACTION ITEMS ──
+    function toggleAction(id) {
+      const detail = document.getElementById('detail-' + id);
+      const chev   = document.getElementById('chev-' + id);
+      const row    = detail.previousElementSibling;
+      const isOpen = detail.classList.contains('open');
+
+      detail.classList.toggle('open', !isOpen);
+      chev.classList.toggle('open', !isOpen);
+      row.classList.toggle('expanded', !isOpen);
+    }
+
+    // ── TOGGLE DATA QUALITY ──
+    function toggleDQ(header) {
+      const body  = header.nextElementSibling;
+      const chev  = header.querySelector('.dq-chevron');
+      const isOpen = body.classList.contains('open');
+      body.classList.toggle('open', !isOpen);
+      chev.classList.toggle('open', !isOpen);
+    }
+
+    // ── TOGGLE COLLAPSIBLE ──
+    function toggleColl(name) {
+      const body = document.getElementById('coll-' + name);
+      const chev = document.getElementById('chev-' + name);
+      const isOpen = body.classList.contains('open');
+      body.classList.toggle('open', !isOpen);
+      chev.classList.toggle('open', !isOpen);
+    }
+
+    // ── TOGGLE FORMULA ──
+    function toggleFormula() {
+      const body = document.getElementById('formulaBody');
+      const chev = document.getElementById('formulaChev');
+      const isOpen = body.classList.contains('open');
+      body.classList.toggle('open', !isOpen);
+      chev.classList.toggle('open', !isOpen);
+    }
+
+    // ── SUPPLIER DRAFT ──
+    let currentSku = '';
+    let currentName = '';
+    let currentVendor = '';
+    let currentQty = 0;
+    let currentLeadTime = 30;
+    let isUrgent = true;
+
+    const URGENT_TEMPLATE = (sku, name, vendor, qty, lead) =>
+`Subject: URGENT Reorder Request — ${name} (${sku})
+
+Hi ${vendor} team,
+
+I'm writing with an urgent reorder request. We are critically low on the following item and need expedited processing if possible.
+
+Item: ${name}
+SKU: ${sku}
+Quantity Needed: ${qty} units
+Standard Lead Time: ${lead} days
+Priority: URGENT — risk of stockout within days
+
+Could you please confirm:
+1. Availability of ${qty} units
+2. Earliest possible ship date
+3. Whether expedited production or shipping is possible
+
+We'd prefer to avoid any stockout on this item. Please reply as soon as possible.
+
+Thank you,
+[Your name]
+[Company]`;
+
+    const STANDARD_TEMPLATE = (sku, name, vendor, qty, lead) =>
+`Subject: Purchase Order Request — ${name} (${sku})
+
+Hi ${vendor} team,
+
+Please find below a standard reorder request for the following item.
+
+Item: ${name}
+SKU: ${sku}
+Quantity: ${qty} units
+Requested Lead Time: ${lead} days
+
+Please confirm receipt of this order and provide an estimated delivery date at your earliest convenience.
+
+Thank you,
+[Your name]
+[Company]`;
+
+    function openDraft(actionId, sku, name, vendor, qty, lead) {
+      currentSku = sku;
+      currentName = name;
+      currentVendor = vendor;
+      currentQty = qty;
+      currentLeadTime = lead;
+      isUrgent = true;
+
+      document.getElementById('draftSku').textContent = sku + ' · ' + name;
+      document.getElementById('draftTag').textContent = 'URGENT EXPEDITE';
+      document.getElementById('draftTag').style.background = 'var(--expedite-bg)';
+      document.getElementById('draftTag').style.color = 'var(--expedite)';
+      document.getElementById('draftTag').style.borderColor = 'var(--expedite-border)';
+      document.getElementById('switchBtn').textContent = 'Switch to standard reorder';
+      document.getElementById('draftTextarea').value = URGENT_TEMPLATE(sku, name, vendor, qty, lead);
+
+      const panel = document.getElementById('draftPanel');
+      panel.classList.add('open');
+      // Smooth scroll to panel
+      setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
+    }
+
+    function switchTemplate() {
+      isUrgent = !isUrgent;
+      const tag    = document.getElementById('draftTag');
+      const btn    = document.getElementById('switchBtn');
+      const textarea = document.getElementById('draftTextarea');
+
+      if (isUrgent) {
+        tag.textContent = 'URGENT EXPEDITE';
+        tag.style.background = 'var(--expedite-bg)';
+        tag.style.color = 'var(--expedite)';
+        tag.style.borderColor = 'var(--expedite-border)';
+        btn.textContent = 'Switch to standard reorder';
+        textarea.value = URGENT_TEMPLATE(currentSku, currentName, currentVendor, currentQty, currentLeadTime);
+      } else {
+        tag.textContent = 'STANDARD REORDER';
+        tag.style.background = 'var(--emerald-bg)';
+        tag.style.color = '#065F46';
+        tag.style.borderColor = 'var(--emerald-border)';
+        btn.textContent = 'Switch to urgent expedite';
+        textarea.value = STANDARD_TEMPLATE(currentSku, currentName, currentVendor, currentQty, currentLeadTime);
+      }
+    }
+
+    function copyDraft() {
+      const text = document.getElementById('draftTextarea').value;
+      const successEl = document.getElementById('copySuccess');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+          successEl.classList.add('show');
+          setTimeout(() => successEl.classList.remove('show'), 2500);
+        }).catch(() => fallbackCopy(text, successEl));
+      } else {
+        fallbackCopy(text, successEl);
+      }
+    }
+
+    function fallbackCopy(text, feedbackEl) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try {
+        document.execCommand('copy');
+        feedbackEl.classList.add('show');
+        setTimeout(() => feedbackEl.classList.remove('show'), 2500);
+      } catch (e) {
+        console.warn('Copy failed', e);
+      }
+      document.body.removeChild(ta);
+    }
+
+    // Open data quality by default on desktop
+    if (window.innerWidth >= 1024) {
+      const dqHeader = document.querySelector('.dq-header');
+      if (dqHeader) toggleDQ(dqHeader);
+    }
+
+    // Auto-expand first action item to demonstrate interactivity
+    toggleAction('a1');
+  </script>
+
+</body>
+</html>

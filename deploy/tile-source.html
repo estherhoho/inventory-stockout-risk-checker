@@ -1,0 +1,115 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  *{margin:0;box-sizing:border-box}
+  html,body{width:1200px;height:630px}
+  body{
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    color:#0f172a; position:relative; overflow:hidden;
+    background:
+      radial-gradient(900px 500px at 100% 0%, #ece7fb 0%, rgba(236,231,251,0) 60%),
+      radial-gradient(700px 500px at 0% 100%, #eaf0fb 0%, rgba(234,240,251,0) 55%),
+      #f5f7fb;
+  }
+  .frame{position:absolute;inset:28px;background:#fff;border:1px solid #e6ebf2;border-radius:26px;
+    box-shadow:0 24px 60px rgba(79,65,137,.14); display:flex; overflow:hidden;}
+  .left{flex:1 1 56%; padding:54px 46px; display:flex; flex-direction:column;}
+  .brandrow{display:flex;align-items:center;gap:12px;}
+  .logo{width:46px;height:46px;border-radius:13px;background:linear-gradient(135deg,#8a72c8,#6f6bc0);
+    color:#fff;font-weight:800;font-size:24px;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 8px 20px rgba(98,83,160,.4);}
+  .brandname{font-size:15px;font-weight:700;letter-spacing:.18em;color:#6253a0;text-transform:uppercase;}
+  .pill{display:inline-flex;align-items:center;gap:8px;margin-top:30px;align-self:flex-start;
+    background:#f4f2fb;color:#6253a0;border:1px solid #e4def3;border-radius:999px;
+    padding:7px 15px;font-weight:700;font-size:15px;}
+  .pill .dot{width:9px;height:9px;border-radius:50%;background:#15803d;}
+  h1{font-size:48px;line-height:1.08;letter-spacing:-.025em;margin-top:18px;font-weight:800;max-width:520px;}
+  .tag{font-size:19px;color:#64748b;margin-top:16px;line-height:1.45;max-width:480px;}
+  .chips{display:flex;gap:10px;margin-top:auto;flex-wrap:wrap;}
+  .chip{font-size:14px;font-weight:700;border-radius:9px;padding:7px 13px;}
+  .c-exp{background:#fde7e7;color:#dc2626;} .c-reo{background:#fff1e3;color:#ea580c;}
+  .c-dead{background:#eee9f7;color:#6d5bb0;} .c-hold{background:#e6f8ee;color:#15803d;}
+
+  .right{flex:0 0 44%;position:relative;background:
+      radial-gradient(420px 360px at 70% 30%, #f4f2fb 0%, rgba(244,242,251,0) 70%), #fbfcfe;
+    border-left:1px solid #eef2f7; display:flex;align-items:center;justify-content:center;}
+  .cluster{position:relative;width:380px;height:430px;}
+  .mini{position:absolute;background:#fff;border:1px solid #e6ebf2;border-radius:16px;
+    box-shadow:0 12px 28px rgba(15,23,42,.08);}
+  .mini .mh{font-size:12px;font-weight:700;color:#64748b;padding:11px 14px 0;}
+  .donutcard{top:0;left:18px;width:212px;height:178px;padding-bottom:6px;}
+  .barcard{top:150px;right:0;width:210px;height:150px;}
+  .runcard{bottom:0;left:36px;width:300px;height:120px;}
+</style></head>
+<body>
+  <div class="frame">
+    <div class="left">
+      <div class="brandrow"><div class="logo">D</div><span class="brandname">Dock&nbsp;to&nbsp;AI</span></div>
+      <span class="pill"><span class="dot"></span>Free tool · Product Playground</span>
+      <h1>Inventory Stockout Risk Checker</h1>
+      <p class="tag">See what to reorder, expedite, hold, or mark down — this week. Chart-led &amp; browser-local; your data never leaves your browser.</p>
+      <div class="chips">
+        <span class="chip c-exp">Expedite</span>
+        <span class="chip c-reo">Reorder</span>
+        <span class="chip c-hold">Hold</span>
+        <span class="chip c-dead">Deadstock</span>
+      </div>
+    </div>
+    <div class="right">
+      <div class="cluster">
+        <!-- donut mini -->
+        <div class="mini donutcard">
+          <div class="mh">Inventory status</div>
+          <svg width="212" height="150" viewBox="0 0 212 150">
+            <g transform="translate(70,82)">
+              <circle r="46" fill="none" stroke="#eef2f8" stroke-width="16"/>
+              <!-- 4/3/3 of 10 -> 144deg exp, 108 dead, 108 hold -->
+              <circle r="46" fill="none" stroke="#dc2626" stroke-width="16" stroke-dasharray="115.6 173.4" transform="rotate(-90)"/>
+              <circle r="46" fill="none" stroke="#6d5bb0" stroke-width="16" stroke-dasharray="86.7 202.3" transform="rotate(54)"/>
+              <circle r="46" fill="none" stroke="#15803d" stroke-width="16" stroke-dasharray="86.7 202.3" transform="rotate(162)"/>
+              <text text-anchor="middle" y="-2" font-size="20" font-weight="800" fill="#0f172a">10</text>
+              <text text-anchor="middle" y="14" font-size="10" fill="#64748b">SKUs</text>
+            </g>
+            <g font-size="11" fill="#64748b">
+              <rect x="140" y="44" width="9" height="9" rx="2" fill="#dc2626"/><text x="153" y="52">4 risk</text>
+              <rect x="140" y="64" width="9" height="9" rx="2" fill="#6d5bb0"/><text x="153" y="72">3 dead</text>
+              <rect x="140" y="84" width="9" height="9" rx="2" fill="#15803d"/><text x="153" y="92">3 hold</text>
+            </g>
+          </svg>
+        </div>
+        <!-- bars mini -->
+        <div class="mini barcard">
+          <div class="mh">Cash on the line</div>
+          <svg width="210" height="108" viewBox="0 0 210 108">
+            <g transform="translate(16,92)">
+              <line x1="0" y1="0" x2="186" y2="0" stroke="#eef2f8"/>
+              <rect x="6"   y="-34" width="26" height="34" rx="3" fill="#dc2626"/>
+              <rect x="42"  y="-58" width="26" height="58" rx="3" fill="#dc2626"/>
+              <rect x="78"  y="-22" width="26" height="22" rx="3" fill="#ea580c"/>
+              <rect x="114" y="-44" width="26" height="44" rx="3" fill="#6d5bb0"/>
+              <rect x="150" y="-30" width="26" height="30" rx="3" fill="#6d5bb0"/>
+            </g>
+          </svg>
+        </div>
+        <!-- runway mini -->
+        <div class="mini runcard">
+          <div class="mh">Stockout runway</div>
+          <svg width="300" height="82" viewBox="0 0 300 82">
+            <g font-size="10" fill="#94a3b8">
+              <g transform="translate(14,26)">
+                <rect x="0" y="0" width="70" height="13" rx="6" fill="#dc2626"/>
+                <rect x="70" y="0" width="60" height="13" rx="6" fill="#f7bcbc"/>
+                <line x1="130" y1="-4" x2="130" y2="17" stroke="#6253a0" stroke-width="2"/>
+                <text x="200" y="11" fill="#64748b">SKU-1004 · 29d short</text>
+              </g>
+              <g transform="translate(14,52)">
+                <rect x="0" y="0" width="150" height="13" rx="6" fill="#ea580c"/>
+                <line x1="180" y1="-4" x2="180" y2="17" stroke="#6253a0" stroke-width="2"/>
+                <text x="200" y="11" fill="#64748b">SKU-1001 · reorder</text>
+              </g>
+            </g>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</body></html>

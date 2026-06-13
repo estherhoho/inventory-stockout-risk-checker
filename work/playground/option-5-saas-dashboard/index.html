@@ -1,0 +1,2223 @@
+<!-- Option 5: SaaS Dashboard -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventory Stockout Risk Checker — SaaS Dashboard</title>
+<style>
+  /* ===================== RESET & BASE ===================== */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --sidebar-w: 200px;
+    --sidebar-bg: #1E293B;
+    --sidebar-text: #CBD5E1;
+    --sidebar-active-bg: #334155;
+    --sidebar-active-border: #0EA5E9;
+    --header-h: 60px;
+    --content-bg: #F1F5F9;
+    --white: #ffffff;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,.08), 0 2px 4px -1px rgba(0,0,0,.05);
+    --border: #E2E8F0;
+    --text-primary: #0F172A;
+    --text-secondary: #64748B;
+    --text-muted: #94A3B8;
+    --red: #EF4444;
+    --amber: #F59E0B;
+    --emerald: #10B981;
+    --violet: #7C3AED;
+    --sky: #0EA5E9;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+    --radius: 8px;
+    --radius-sm: 5px;
+    --transition: 0.18s ease;
+  }
+
+  html, body {
+    height: 100%;
+    font-family: var(--font);
+    font-size: 14px;
+    color: var(--text-primary);
+    background: var(--content-bg);
+    overflow: hidden;
+  }
+
+  /* ===================== APP SHELL ===================== */
+  .app-shell {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ===================== SIDEBAR ===================== */
+  .sidebar {
+    width: var(--sidebar-w);
+    min-width: var(--sidebar-w);
+    background: var(--sidebar-bg);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    z-index: 100;
+    flex-shrink: 0;
+  }
+
+  .sidebar-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 20px 16px 18px;
+    border-bottom: 1px solid rgba(255,255,255,.07);
+  }
+
+  .sidebar-logo-icon {
+    width: 28px;
+    height: 28px;
+    background: var(--sky);
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .sidebar-logo-icon svg {
+    width: 16px;
+    height: 16px;
+    fill: white;
+  }
+
+  .sidebar-logo-text {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--white);
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+  }
+
+  .sidebar-logo-text span {
+    display: block;
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--sidebar-text);
+    margin-top: 1px;
+  }
+
+  .sidebar-section-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #475569;
+    padding: 18px 16px 6px;
+  }
+
+  .sidebar-nav {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 16px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 16px;
+    cursor: pointer;
+    color: var(--sidebar-text);
+    font-size: 13px;
+    font-weight: 500;
+    border-left: 3px solid transparent;
+    transition: background var(--transition), color var(--transition), border-color var(--transition);
+    user-select: none;
+    position: relative;
+  }
+
+  .nav-item:hover {
+    background: rgba(255,255,255,.05);
+    color: #F1F5F9;
+  }
+
+  .nav-item.active {
+    background: var(--sidebar-active-bg);
+    color: var(--white);
+    border-left-color: var(--sidebar-active-border);
+    font-weight: 600;
+  }
+
+  .nav-item-icon {
+    width: 16px;
+    height: 16px;
+    opacity: 0.7;
+    flex-shrink: 0;
+  }
+
+  .nav-item.active .nav-item-icon {
+    opacity: 1;
+  }
+
+  .nav-badge {
+    margin-left: auto;
+    background: var(--red);
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 10px;
+    line-height: 16px;
+  }
+
+  .sidebar-footer {
+    border-top: 1px solid rgba(255,255,255,.07);
+    padding: 14px 16px;
+  }
+
+  .sidebar-footer-text {
+    font-size: 11px;
+    color: #475569;
+    line-height: 1.5;
+  }
+
+  /* ===================== MAIN CONTENT ===================== */
+  .main-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+  }
+
+  /* Header */
+  .top-header {
+    height: var(--header-h);
+    min-height: var(--header-h);
+    background: var(--white);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    gap: 16px;
+    z-index: 50;
+    flex-shrink: 0;
+  }
+
+  .header-title {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .header-title h1 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .header-subtitle {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 1px;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 13px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all var(--transition);
+    line-height: 1;
+    white-space: nowrap;
+    font-family: var(--font);
+  }
+
+  .btn-secondary {
+    background: var(--white);
+    border-color: var(--border);
+    color: var(--text-secondary);
+  }
+
+  .btn-secondary:hover {
+    background: #F8FAFC;
+    border-color: #CBD5E1;
+    color: var(--text-primary);
+  }
+
+  .btn-primary {
+    background: var(--sky);
+    color: white;
+    border-color: var(--sky);
+  }
+
+  .btn-primary:hover {
+    background: #0284C7;
+    border-color: #0284C7;
+  }
+
+  .btn-danger {
+    background: var(--red);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 10px;
+    letter-spacing: 0.03em;
+  }
+
+  .btn-danger:hover { background: #DC2626; }
+
+  .btn-amber-outline {
+    background: white;
+    border-color: var(--amber);
+    color: #92400E;
+    font-size: 12px;
+    padding: 5px 12px;
+  }
+
+  .btn-amber-outline:hover {
+    background: #FEF3C7;
+  }
+
+  .btn-copy {
+    background: var(--emerald);
+    color: white;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 9px 20px;
+  }
+
+  .btn-copy:hover { background: #059669; }
+
+  .btn-copy.copied {
+    background: #059669;
+  }
+
+  .btn-icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  /* Content area */
+  .content-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+  }
+
+  /* ===================== TAB PANELS ===================== */
+  .tab-panel {
+    display: none;
+    animation: fadeIn 0.15s ease;
+  }
+
+  .tab-panel.active {
+    display: block;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ===================== BANNERS ===================== */
+  .banner {
+    border-radius: var(--radius);
+    padding: 11px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .banner-amber {
+    background: #FEF3C7;
+    border: 1px solid #FCD34D;
+    color: #78350F;
+  }
+
+  .banner-icon {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+  }
+
+  .banner-dismiss {
+    margin-left: auto;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #92400E;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0 2px;
+    opacity: 0.6;
+    transition: opacity var(--transition);
+  }
+
+  .banner-dismiss:hover { opacity: 1; }
+
+  /* ===================== SECTION HEADERS ===================== */
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .section-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+  }
+
+  .section-sub {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+
+  /* ===================== KPI CARDS ===================== */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .kpi-card {
+    background: var(--white);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+
+  .kpi-card.kpi-neutral::before { background: var(--sky); }
+  .kpi-card.kpi-red::before { background: var(--red); }
+  .kpi-card.kpi-violet::before { background: var(--violet); }
+  .kpi-card.kpi-amber::before { background: var(--amber); }
+
+  .kpi-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  .kpi-value {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    color: var(--text-primary);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .kpi-card.kpi-red .kpi-value { color: var(--red); }
+  .kpi-card.kpi-violet .kpi-value { color: var(--violet); }
+  .kpi-card.kpi-amber .kpi-value { color: #92400E; }
+
+  .kpi-note {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  /* ===================== CONTENT GRID (Overview) ===================== */
+  .overview-grid {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 16px;
+    align-items: start;
+  }
+
+  /* ===================== CARDS ===================== */
+  .card {
+    background: var(--white);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 13px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .card-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  .card-body {
+    padding: 16px 18px;
+  }
+
+  /* ===================== URGENT ACTION LIST ===================== */
+  .action-list {
+    list-style: none;
+  }
+
+  .action-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background var(--transition);
+    margin: 0 -18px;
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .action-item:last-child { border-bottom: none; }
+
+  .action-item:hover { background: #F8FAFC; }
+
+  .action-badge {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    padding: 3px 7px;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+
+  .badge-expedite {
+    background: #FEE2E2;
+    color: var(--red);
+  }
+
+  .badge-reorder {
+    background: #FEF3C7;
+    color: #92400E;
+  }
+
+  .badge-hold {
+    background: #DCFCE7;
+    color: #166534;
+  }
+
+  .badge-deadstock {
+    background: #EDE9FE;
+    color: var(--violet);
+  }
+
+  .action-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .action-sku {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.03em;
+  }
+
+  .action-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .action-meta {
+    display: flex;
+    gap: 12px;
+    margin-left: auto;
+    flex-shrink: 0;
+    text-align: right;
+  }
+
+  .action-meta-item {
+    font-size: 12px;
+  }
+
+  .action-meta-label {
+    color: var(--text-muted);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .action-meta-value {
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  .action-meta-value.danger { color: var(--red); }
+
+  .view-link {
+    display: block;
+    text-align: center;
+    padding: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--sky);
+    text-decoration: none;
+    border-top: 1px solid var(--border);
+    transition: background var(--transition);
+    cursor: pointer;
+  }
+
+  .view-link:hover { background: #F0F9FF; }
+
+  /* ===================== DATA QUALITY PANEL ===================== */
+  .dq-list {
+    list-style: none;
+  }
+
+  .dq-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+    font-size: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .dq-item:last-child { border-bottom: none; }
+
+  .dq-dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .dq-dot.ok {
+    background: #DCFCE7;
+    color: var(--emerald);
+  }
+
+  .dq-dot.missing {
+    background: #F1F5F9;
+    color: var(--text-muted);
+    border: 1.5px solid #CBD5E1;
+  }
+
+  .dq-field {
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .dq-status {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .dq-status.ok { color: var(--emerald); }
+  .dq-status.missing { color: var(--text-muted); }
+
+  /* ===================== TABLES ===================== */
+  .table-wrap {
+    background: var(--white);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .data-table thead {
+    background: #F8FAFC;
+    border-bottom: 2px solid var(--border);
+  }
+
+  .data-table th {
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .data-table td {
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+    color: var(--text-primary);
+  }
+
+  .data-table tbody tr:last-child td { border-bottom: none; }
+
+  .data-table tbody tr {
+    transition: background var(--transition);
+  }
+
+  .data-table tbody tr:hover { background: #F8FAFC; }
+
+  .data-table tbody tr.row-expedite:hover { background: #FFF5F5; }
+
+  .sku-code {
+    font-family: 'SF Mono', 'Fira Mono', 'Courier New', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    letter-spacing: 0.03em;
+  }
+
+  .product-name {
+    font-weight: 500;
+    max-width: 180px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .days-cover-main {
+    font-weight: 700;
+    font-size: 14px;
+  }
+
+  .days-cover-main.danger { color: var(--red); }
+  .days-cover-main.warning { color: var(--amber); }
+  .days-cover-main.ok { color: var(--emerald); }
+
+  .days-short {
+    font-size: 11px;
+    color: var(--red);
+    font-weight: 600;
+    margin-top: 2px;
+  }
+
+  .risk-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+
+  .risk-high { background: #FEE2E2; color: var(--red); }
+  .risk-low { background: #DCFCE7; color: #166534; }
+  .risk-deadstock { background: #EDE9FE; color: var(--violet); }
+  .risk-nosales { background: #F1F5F9; color: var(--text-muted); }
+
+  .vendor-name {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .cash-value {
+    font-weight: 600;
+    font-family: 'SF Mono', 'Fira Mono', 'Courier New', monospace;
+    font-size: 13px;
+  }
+
+  /* Lead time inline edit */
+  .lead-time-cell {
+    position: relative;
+  }
+
+  .lead-time-val {
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    display: inline-block;
+    transition: border-color var(--transition), background var(--transition);
+    font-weight: 600;
+    min-width: 36px;
+    text-align: center;
+  }
+
+  .lead-time-val:hover {
+    border-color: var(--sky);
+    background: #F0F9FF;
+    color: var(--sky);
+  }
+
+  .lead-time-input {
+    width: 52px;
+    padding: 3px 6px;
+    border: 1.5px solid var(--sky);
+    border-radius: 4px;
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: 600;
+    outline: none;
+    color: var(--text-primary);
+    background: white;
+  }
+
+  .lead-time-hint {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 1px;
+  }
+
+  /* ===================== DEADSTOCK TAB ===================== */
+  .offseason-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 7px;
+    border-radius: 12px;
+    background: #FEF3C7;
+    color: #92400E;
+    font-size: 10px;
+    font-weight: 700;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+
+  .deadstock-note {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-style: italic;
+    margin-top: 3px;
+  }
+
+  .deadstock-summary {
+    background: #FEF3C7;
+    border: 1px solid #FCD34D;
+    border-radius: var(--radius-sm);
+    padding: 11px 16px;
+    margin-top: 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #78350F;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* ===================== SUPPLIER DRAFT TAB ===================== */
+  .sku-selector {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+
+  .sku-tab-btn {
+    padding: 6px 13px;
+    border-radius: var(--radius-sm);
+    border: 1.5px solid var(--border);
+    background: var(--white);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition);
+    font-family: var(--font);
+  }
+
+  .sku-tab-btn:hover {
+    border-color: var(--sky);
+    color: var(--sky);
+    background: #F0F9FF;
+  }
+
+  .sku-tab-btn.active {
+    background: var(--sky);
+    border-color: var(--sky);
+    color: white;
+  }
+
+  .template-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .template-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    background: #FEE2E2;
+    border: 1px solid #FECACA;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--red);
+    letter-spacing: 0.03em;
+  }
+
+  .template-toggle {
+    font-size: 12px;
+    color: var(--sky);
+    cursor: pointer;
+    text-decoration: underline;
+    background: none;
+    border: none;
+    font-family: var(--font);
+    padding: 0;
+  }
+
+  .template-toggle:hover { color: #0284C7; }
+
+  .draft-card {
+    background: var(--white);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+
+  .draft-header {
+    padding: 12px 18px;
+    background: #F8FAFC;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .draft-header-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .draft-body {
+    padding: 20px 22px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 320px;
+    outline: none;
+  }
+
+  .draft-body[contenteditable="true"]:focus {
+    background: #FAFCFF;
+  }
+
+  .draft-footer {
+    padding: 12px 18px;
+    border-top: 1px solid var(--border);
+    background: #F8FAFC;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .draft-note {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-style: italic;
+    flex: 1;
+  }
+
+  /* ===================== FORMULAS TAB ===================== */
+  .formula-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .formula-card {
+    background: var(--white);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    padding: 14px 18px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .formula-num {
+    width: 24px;
+    height: 24px;
+    background: var(--sky);
+    color: white;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .formula-content { flex: 1; }
+
+  .formula-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+
+  .formula-expr {
+    font-size: 13px;
+    font-family: 'SF Mono', 'Fira Mono', 'Courier New', monospace;
+    color: var(--sky);
+    background: #F0F9FF;
+    padding: 6px 10px;
+    border-radius: 5px;
+    border: 1px solid #BAE6FD;
+    display: inline-block;
+    word-break: break-all;
+    margin-bottom: 4px;
+  }
+
+  .formula-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  .caveat-section {
+    margin-top: 20px;
+    background: var(--white);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+
+  .caveat-header {
+    background: #FEF3C7;
+    border-bottom: 1px solid #FCD34D;
+    padding: 11px 18px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #78350F;
+  }
+
+  .caveat-list {
+    list-style: none;
+    padding: 0 18px;
+  }
+
+  .caveat-item {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+
+  .caveat-item:last-child { border-bottom: none; }
+
+  .caveat-trigger {
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 3px;
+  }
+
+  .caveat-trigger-tag {
+    display: inline-block;
+    background: #FEF3C7;
+    border: 1px solid #FCD34D;
+    color: #92400E;
+    padding: 1px 7px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    margin-right: 6px;
+  }
+
+  .caveat-explain {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  .caveat-note {
+    padding: 12px 18px;
+    background: #F8FAFC;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-style: italic;
+  }
+
+  /* ===================== BOTTOM TAB BAR (Mobile) ===================== */
+  .bottom-tabbar {
+    display: none;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 58px;
+    background: var(--white);
+    border-top: 1px solid var(--border);
+    z-index: 200;
+    flex-direction: row;
+  }
+
+  .tab-bar-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 6px 4px;
+    transition: color var(--transition), background var(--transition);
+    border: none;
+    background: none;
+    font-family: var(--font);
+    position: relative;
+  }
+
+  .tab-bar-item.active {
+    color: var(--sky);
+  }
+
+  .tab-bar-item.active::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 20%; right: 20%;
+    height: 2px;
+    background: var(--sky);
+    border-radius: 0 0 2px 2px;
+  }
+
+  .tab-bar-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .tab-bar-badge {
+    position: absolute;
+    top: 5px;
+    right: calc(50% - 14px);
+    background: var(--red);
+    color: white;
+    font-size: 9px;
+    font-weight: 800;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ===================== SCROLLBAR ===================== */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+  /* ===================== RESPONSIVE ===================== */
+  @media (max-width: 1023px) {
+    .sidebar { display: none; }
+    .bottom-tabbar { display: flex; }
+    .content-area { padding: 16px 16px 74px; }
+    .top-header { padding: 0 16px; }
+    .kpi-row { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .overview-grid { grid-template-columns: 1fr; }
+    html, body { overflow: hidden; }
+    .app-shell { overflow: hidden; }
+    .main-area { overflow: hidden; }
+  }
+
+  @media (max-width: 600px) {
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+    .kpi-value { font-size: 22px; }
+    .header-title h1 { font-size: 13px; }
+    .header-actions .btn-secondary { display: none; }
+    .table-wrap { overflow-x: auto; }
+    .data-table { min-width: 560px; }
+  }
+
+  /* ===================== BACK LINK ===================== */
+  .back-link {
+    position: fixed;
+    bottom: 18px;
+    right: 18px;
+    background: var(--sidebar-bg);
+    color: var(--sidebar-text);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 20px;
+    text-decoration: none;
+    box-shadow: var(--shadow-md);
+    z-index: 999;
+    transition: background var(--transition), color var(--transition);
+    letter-spacing: 0.01em;
+  }
+
+  .back-link:hover {
+    background: #0F172A;
+    color: white;
+  }
+
+  @media (max-width: 1023px) {
+    .back-link { bottom: 70px; right: 12px; font-size: 11px; padding: 7px 12px; }
+  }
+
+  /* ===================== UTILITIES ===================== */
+  .text-muted { color: var(--text-muted); }
+  .text-sm { font-size: 12px; }
+  .font-mono {
+    font-family: 'SF Mono', 'Fira Mono', 'Courier New', monospace;
+  }
+  .flex-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .spacer { flex: 1; }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- ==================== SIDEBAR ==================== -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-icon">
+        <svg viewBox="0 0 20 20"><path d="M2 4h16v2H2V4zm0 5h12v2H2V9zm0 5h16v2H2v-2z"/></svg>
+      </div>
+      <div class="sidebar-logo-text">
+        Stockout Risk
+        <span>Inventory Checker</span>
+      </div>
+    </div>
+
+    <div class="sidebar-section-label">Analysis</div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-item active" data-tab="overview" onclick="switchTab('overview', this)">
+        <svg class="nav-item-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 6a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zm10-1a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/></svg>
+        Overview
+      </div>
+      <div class="nav-item" data-tab="stockout" onclick="switchTab('stockout', this)">
+        <svg class="nav-item-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+        Stockout Risk
+        <span class="nav-badge">4</span>
+      </div>
+      <div class="nav-item" data-tab="deadstock" onclick="switchTab('deadstock', this)">
+        <svg class="nav-item-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z"/><path fill-rule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm5 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" clip-rule="evenodd"/></svg>
+        Deadstock
+      </div>
+      <div class="nav-item" data-tab="draft" onclick="switchTab('draft', this)">
+        <svg class="nav-item-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/></svg>
+        Supplier Draft
+      </div>
+      <div class="nav-item" data-tab="formulas" onclick="switchTab('formulas', this)">
+        <svg class="nav-item-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm2 10a1 1 0 10-2 0v3a1 1 0 102 0v-3zm2-3a1 1 0 011 1v5a1 1 0 11-2 0v-5a1 1 0 011-1zm4-1a1 1 0 10-2 0v7a1 1 0 102 0V8z" clip-rule="evenodd"/></svg>
+        Formulas
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-footer-text">
+        Sample data · 10 SKUs<br>
+        <span style="color:#334155">Ready for CSV upload</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ==================== MAIN AREA ==================== -->
+  <div class="main-area">
+
+    <!-- Header -->
+    <header class="top-header">
+      <div class="header-title">
+        <h1>Inventory Stockout Risk Checker</h1>
+        <div class="header-subtitle">Last run: Sample data (10 SKUs)</div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary" onclick="document.getElementById('csv-input').click()">
+          <svg class="btn-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M.5 9.9a.5.5 0 01.5.5v2.5a1 1 0 001 1h12a1 1 0 001-1v-2.5a.5.5 0 011 0v2.5a2 2 0 01-2 2H2a2 2 0 01-2-2v-2.5a.5.5 0 01.5-.5z"/><path d="M7.646 1.146a.5.5 0 01.708 0l3 3a.5.5 0 01-.708.708L8.5 2.707V11.5a.5.5 0 01-1 0V2.707L5.354 4.854a.5.5 0 11-.708-.708l3-3z"/></svg>
+          Upload CSV
+        </button>
+        <input type="file" id="csv-input" accept=".csv" style="display:none">
+      </div>
+    </header>
+
+    <!-- Content -->
+    <div class="content-area">
+
+      <!-- ============ TAB 1: OVERVIEW ============ -->
+      <div id="tab-overview" class="tab-panel active">
+
+        <!-- Alert banner -->
+        <div id="banner-returns" class="banner banner-amber">
+          <svg class="banner-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+          <span><strong>Note:</strong> Inventory figures may not be net of returns. Verify on-hand counts before placing orders.</span>
+          <button class="banner-dismiss" onclick="document.getElementById('banner-returns').remove()" title="Dismiss">×</button>
+        </div>
+
+        <!-- KPI row -->
+        <div class="kpi-row">
+          <div class="kpi-card kpi-neutral">
+            <div class="kpi-label">SKUs Analyzed</div>
+            <div class="kpi-value">10</div>
+            <div class="kpi-note">Sample dataset</div>
+          </div>
+          <div class="kpi-card kpi-red">
+            <div class="kpi-label">Expedite Now</div>
+            <div class="kpi-value">4</div>
+            <div class="kpi-note">Days cover &lt; lead time</div>
+          </div>
+          <div class="kpi-card kpi-violet">
+            <div class="kpi-label">Deadstock</div>
+            <div class="kpi-value">3</div>
+            <div class="kpi-note">Candidates</div>
+          </div>
+          <div class="kpi-card kpi-amber">
+            <div class="kpi-label">Cash at Risk</div>
+            <div class="kpi-value">$2,296</div>
+            <div class="kpi-note">Tied up in deadstock</div>
+          </div>
+        </div>
+
+        <!-- Two-column grid -->
+        <div class="overview-grid">
+
+          <!-- Urgent actions card -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Top Urgent Actions</span>
+              <span style="font-size:11px;color:var(--text-muted);">Sorted by days cover ↑</span>
+            </div>
+            <ul class="action-list" style="padding:0 18px">
+              <li class="action-item" onclick="switchTab('draft', document.querySelector('[data-tab=draft]')); selectDraftSku('SKU-1004')">
+                <span class="action-badge badge-expedite">EXPEDITE</span>
+                <div class="action-info">
+                  <div class="action-sku">SKU-1004</div>
+                  <div class="action-name">Cotton Drawer Organizer</div>
+                </div>
+                <div class="action-meta">
+                  <div class="action-meta-item">
+                    <div class="action-meta-label">Days Cover</div>
+                    <div class="action-meta-value danger">1.2d</div>
+                  </div>
+                  <div class="action-meta-item">
+                    <div class="action-meta-label">Reorder</div>
+                    <div class="action-meta-value">108</div>
+                  </div>
+                </div>
+              </li>
+              <li class="action-item" onclick="switchTab('draft', document.querySelector('[data-tab=draft]')); selectDraftSku('SKU-1001')">
+                <span class="action-badge badge-expedite">EXPEDITE</span>
+                <div class="action-info">
+                  <div class="action-sku">SKU-1001</div>
+                  <div class="action-name">Bamboo Storage Bin - Small</div>
+                </div>
+                <div class="action-meta">
+                  <div class="action-meta-item">
+                    <div class="action-meta-label">Days Cover</div>
+                    <div class="action-meta-value danger">10.7d</div>
+                  </div>
+                  <div class="action-meta-item">
+                    <div class="action-meta-label">Reorder</div>
+                    <div class="action-meta-value">144</div>
+                  </div>
+                </div>
+              </li>
+              <li class="action-item" onclick="switchTab('draft', document.querySelector('[data-tab=draft]')); selectDraftSku('SKU-1007')">
+                <span class="action-badge badge-expedite">EXPEDITE</span>
+                <div class="action-info">
+                  <div class="action-sku">SKU-1007</div>
+                  <div class="action-name">Glass Meal Prep Container 3pk</div>
+                </div>
+                <div class="action-meta">
+                  <div class="action-meta-item">
+                    <div class="action-meta-label">Days Cover</div>
+                    <div class="action-meta-value danger">16.4d</div>
+                  </div>
+                  <div class="action-meta-item">
+                    <div class="action-meta-label">Reorder</div>
+                    <div class="action-meta-value">18</div>
+                  </div>
+                </div>
+              </li>
+              <li class="action-item" onclick="switchTab('draft', document.querySelector('[data-tab=draft]')); selectDraftSku('SKU-1002')">
+                <span class="action-badge badge-expedite">EXPEDITE</span>
+                <div class="action-info">
+                  <div class="action-sku">SKU-1002</div>
+                  <div class="action-name">Bamboo Storage Bin - Large</div>
+                </div>
+                <div class="action-meta">
+                  <div class="action-meta-item">
+                    <div class="action-meta-label">Days Cover</div>
+                    <div class="action-meta-value danger">17.5d</div>
+                  </div>
+                  <div class="action-meta-item">
+                    <div class="action-meta-label">Reorder</div>
+                    <div class="action-meta-value">120</div>
+                  </div>
+                </div>
+              </li>
+            </ul>
+            <div class="view-link" onclick="switchTab('stockout', document.querySelector('[data-tab=stockout]'))">View full stockout table →</div>
+          </div>
+
+          <!-- Data quality panel -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Data Quality</span>
+            </div>
+            <div class="card-body" style="padding-top:8px;padding-bottom:8px;">
+              <ul class="dq-list">
+                <li class="dq-item">
+                  <div class="dq-dot ok">✓</div>
+                  <div>
+                    <div class="dq-field">Unit Cost</div>
+                    <div class="text-sm text-muted">Used in cash estimates</div>
+                  </div>
+                  <span class="dq-status ok">Present</span>
+                </li>
+                <li class="dq-item">
+                  <div class="dq-dot ok">✓</div>
+                  <div>
+                    <div class="dq-field">Vendor</div>
+                    <div class="text-sm text-muted">Used in supplier drafts</div>
+                  </div>
+                  <span class="dq-status ok">Present</span>
+                </li>
+                <li class="dq-item">
+                  <div class="dq-dot ok">✓</div>
+                  <div>
+                    <div class="dq-field">Committed Units</div>
+                    <div class="text-sm text-muted">Deducted from available</div>
+                  </div>
+                  <span class="dq-status ok">Present</span>
+                </li>
+                <li class="dq-item">
+                  <div class="dq-dot ok">✓</div>
+                  <div>
+                    <div class="dq-field">Incoming Units</div>
+                    <div class="text-sm text-muted">Adds to effective inv.</div>
+                  </div>
+                  <span class="dq-status ok">Present</span>
+                </li>
+                <li class="dq-item">
+                  <div class="dq-dot missing">○</div>
+                  <div>
+                    <div class="dq-field">Category</div>
+                    <div class="text-sm text-muted">Optional field</div>
+                  </div>
+                  <span class="dq-status missing">Missing</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+        </div>
+      </div><!-- /tab-overview -->
+
+      <!-- ============ TAB 2: STOCKOUT RISK ============ -->
+      <div id="tab-stockout" class="tab-panel">
+        <div class="section-header">
+          <span class="section-title">Stockout Risk</span>
+          <span class="section-sub">4 SKUs need expediting</span>
+        </div>
+
+        <div class="banner banner-amber" style="margin-bottom:16px;">
+          <svg class="banner-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+          <span>Verify inventory is net of returns before placing reorders. Click lead time to edit inline.</span>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>SKU</th>
+                <th>Product</th>
+                <th>Days Cover</th>
+                <th>Lead Time</th>
+                <th>Risk</th>
+                <th>Reorder Qty</th>
+                <th>Est. Cash</th>
+                <th>Vendor</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- EXPEDITE rows -->
+              <tr class="row-expedite">
+                <td><span class="sku-code">SKU-1004</span></td>
+                <td><div class="product-name">Cotton Drawer Organizer</div></td>
+                <td>
+                  <div class="days-cover-main danger">1.2d</div>
+                  <div class="days-short">29d short</div>
+                </td>
+                <td class="lead-time-cell">
+                  <span class="lead-time-val" onclick="startEditLt(this)" title="Click to edit">30d</span>
+                  <div class="lead-time-hint">days</div>
+                </td>
+                <td><span class="risk-pill risk-high">HIGH</span></td>
+                <td><strong>108</strong></td>
+                <td><span class="cash-value">$513</span></td>
+                <td><span class="vendor-name">Northstar Home</span></td>
+                <td>
+                  <button class="btn btn-danger" onclick="switchTab('draft', document.querySelector('[data-tab=draft]')); selectDraftSku('SKU-1004')">EXPEDITE</button>
+                </td>
+              </tr>
+              <tr class="row-expedite">
+                <td><span class="sku-code">SKU-1001</span></td>
+                <td><div class="product-name">Bamboo Storage Bin - Small</div></td>
+                <td>
+                  <div class="days-cover-main danger">10.7d</div>
+                  <div class="days-short">17d short</div>
+                </td>
+                <td class="lead-time-cell">
+                  <span class="lead-time-val" onclick="startEditLt(this)" title="Click to edit">28d</span>
+                  <div class="lead-time-hint">days</div>
+                </td>
+                <td><span class="risk-pill risk-high">HIGH</span></td>
+                <td><strong>144</strong></td>
+                <td><span class="cash-value">$1,224</span></td>
+                <td><span class="vendor-name">Northstar Home</span></td>
+                <td>
+                  <button class="btn btn-danger" onclick="switchTab('draft', document.querySelector('[data-tab=draft]')); selectDraftSku('SKU-1001')">EXPEDITE</button>
+                </td>
+              </tr>
+              <tr class="row-expedite">
+                <td><span class="sku-code">SKU-1007</span></td>
+                <td><div class="product-name">Glass Meal Prep Container 3pk</div></td>
+                <td>
+                  <div class="days-cover-main danger">16.4d</div>
+                  <div class="days-short">44d short</div>
+                </td>
+                <td class="lead-time-cell">
+                  <span class="lead-time-val" onclick="startEditLt(this)" title="Click to edit">60d</span>
+                  <div class="lead-time-hint">days</div>
+                </td>
+                <td><span class="risk-pill risk-high">HIGH</span></td>
+                <td><strong>18</strong></td>
+                <td><span class="cash-value">$194</span></td>
+                <td><span class="vendor-name">Blue Ridge Goods</span></td>
+                <td>
+                  <button class="btn btn-danger" onclick="switchTab('draft', document.querySelector('[data-tab=draft]')); selectDraftSku('SKU-1007')">EXPEDITE</button>
+                </td>
+              </tr>
+              <tr class="row-expedite">
+                <td><span class="sku-code">SKU-1002</span></td>
+                <td><div class="product-name">Bamboo Storage Bin - Large</div></td>
+                <td>
+                  <div class="days-cover-main danger">17.5d</div>
+                  <div class="days-short">18d short</div>
+                </td>
+                <td class="lead-time-cell">
+                  <span class="lead-time-val" onclick="startEditLt(this)" title="Click to edit">35d</span>
+                  <div class="lead-time-hint">days</div>
+                </td>
+                <td><span class="risk-pill risk-high">HIGH</span></td>
+                <td><strong>120</strong></td>
+                <td><span class="cash-value">$1,470</span></td>
+                <td><span class="vendor-name">Northstar Home</span></td>
+                <td>
+                  <button class="btn btn-danger" onclick="switchTab('draft', document.querySelector('[data-tab=draft]')); selectDraftSku('SKU-1002')">EXPEDITE</button>
+                </td>
+              </tr>
+              <!-- STABLE rows -->
+              <tr>
+                <td><span class="sku-code">SKU-1008</span></td>
+                <td><div class="product-name">Stainless Water Bottle 32oz</div></td>
+                <td><div class="days-cover-main ok">48d</div></td>
+                <td class="lead-time-cell">
+                  <span class="lead-time-val" onclick="startEditLt(this)" title="Click to edit">30d</span>
+                  <div class="lead-time-hint">days</div>
+                </td>
+                <td><span class="risk-pill risk-low">LOW</span></td>
+                <td><span class="text-muted">—</span></td>
+                <td><span class="text-muted">—</span></td>
+                <td><span class="vendor-name">Blue Ridge Goods</span></td>
+                <td><span class="action-badge badge-hold">HOLD</span></td>
+              </tr>
+              <tr>
+                <td><span class="sku-code">SKU-1006</span></td>
+                <td><div class="product-name">Mesh Laundry Bag 3-Pack</div></td>
+                <td><div class="days-cover-main ok">83d</div></td>
+                <td class="lead-time-cell">
+                  <span class="lead-time-val" onclick="startEditLt(this)" title="Click to edit">21d</span>
+                  <div class="lead-time-hint">days</div>
+                </td>
+                <td><span class="risk-pill risk-low">LOW</span></td>
+                <td><span class="text-muted">—</span></td>
+                <td><span class="text-muted">—</span></td>
+                <td><span class="vendor-name">Greenline Supply</span></td>
+                <td><span class="action-badge badge-hold">HOLD</span></td>
+              </tr>
+              <tr>
+                <td><span class="sku-code">SKU-1009</span></td>
+                <td><div class="product-name">Silicone Food Bag Set 4pk</div></td>
+                <td><div class="days-cover-main ok">95d</div></td>
+                <td class="lead-time-cell">
+                  <span class="lead-time-val" onclick="startEditLt(this)" title="Click to edit">28d</span>
+                  <div class="lead-time-hint">days</div>
+                </td>
+                <td><span class="risk-pill risk-low">LOW</span></td>
+                <td><span class="text-muted">—</span></td>
+                <td><span class="text-muted">—</span></td>
+                <td><span class="vendor-name">Greenline Supply</span></td>
+                <td><span class="action-badge badge-hold">HOLD</span></td>
+              </tr>
+              <!-- DEADSTOCK rows -->
+              <tr>
+                <td><span class="sku-code">SKU-1003</span></td>
+                <td><div class="product-name">Silicone Travel Bottle Set</div></td>
+                <td><div class="days-cover-main" style="color:var(--violet)">587d</div></td>
+                <td class="lead-time-cell">
+                  <span class="lead-time-val" onclick="startEditLt(this)" title="Click to edit">45d</span>
+                  <div class="lead-time-hint">days</div>
+                </td>
+                <td><span class="risk-pill risk-deadstock">DEADSTOCK</span></td>
+                <td><span class="text-muted">—</span></td>
+                <td><span class="cash-value" style="color:var(--violet)">$744</span></td>
+                <td><span class="vendor-name">Blue Ridge Goods</span></td>
+                <td><span class="action-badge badge-deadstock">REVIEW</span></td>
+              </tr>
+              <tr>
+                <td><span class="sku-code">SKU-1010</span></td>
+                <td><div class="product-name">Holiday Gift Wrap Bundle</div></td>
+                <td><div class="days-cover-main" style="color:var(--violet)">1,791d</div></td>
+                <td class="lead-time-cell">
+                  <span class="lead-time-val" onclick="startEditLt(this)" title="Click to edit">30d</span>
+                  <div class="lead-time-hint">days</div>
+                </td>
+                <td><span class="risk-pill risk-deadstock">DEADSTOCK</span></td>
+                <td><span class="text-muted">—</span></td>
+                <td><span class="cash-value" style="color:var(--violet)">$870</span></td>
+                <td><span class="vendor-name">Seasonal House</span></td>
+                <td><span class="action-badge badge-deadstock">REVIEW</span></td>
+              </tr>
+              <!-- NO SALES -->
+              <tr>
+                <td><span class="sku-code">SKU-1005</span></td>
+                <td><div class="product-name">Reusable Produce Bag Set</div></td>
+                <td><div class="days-cover-main text-muted">—</div></td>
+                <td class="lead-time-cell">
+                  <span class="lead-time-val" onclick="startEditLt(this)" title="Click to edit">21d</span>
+                  <div class="lead-time-hint">days</div>
+                </td>
+                <td><span class="risk-pill risk-nosales">NO SALES</span></td>
+                <td><span class="text-muted">—</span></td>
+                <td><span class="cash-value" style="color:var(--violet)">$682</span></td>
+                <td><span class="vendor-name">Greenline Supply</span></td>
+                <td><span class="action-badge badge-deadstock">REVIEW</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div><!-- /tab-stockout -->
+
+      <!-- ============ TAB 3: DEADSTOCK ============ -->
+      <div id="tab-deadstock" class="tab-panel">
+        <div class="section-header">
+          <span class="section-title">Deadstock Candidates</span>
+          <span class="section-sub">$2,296 cash at risk</span>
+        </div>
+
+        <div class="banner banner-amber" style="margin-bottom:16px;">
+          <svg class="banner-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+          <span>Deadstock candidates only. Off-season SKUs may appear here as false positives.</span>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>SKU</th>
+                <th>Product</th>
+                <th>Days Cover</th>
+                <th>On-Hand</th>
+                <th>Cash Tied Up</th>
+                <th>Vendor</th>
+                <th>Risk</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="sku-code">SKU-1003</span></td>
+                <td>
+                  <div class="product-name">Silicone Travel Bottle Set</div>
+                  <div class="deadstock-note">Confirm against assortment calendar before markdown.</div>
+                </td>
+                <td><div class="days-cover-main" style="color:var(--violet)">587d</div></td>
+                <td>124</td>
+                <td><span class="cash-value" style="color:var(--violet)">$744</span></td>
+                <td><span class="vendor-name">Blue Ridge Goods</span></td>
+                <td><span class="risk-pill risk-deadstock">DEADSTOCK</span></td>
+                <td><button class="btn btn-amber-outline">Review</button></td>
+              </tr>
+              <tr>
+                <td><span class="sku-code">SKU-1005</span></td>
+                <td>
+                  <div class="product-name">Reusable Produce Bag Set</div>
+                  <div class="deadstock-note">No sales recorded. Confirm item is active and listed correctly.</div>
+                </td>
+                <td><div class="days-cover-main text-muted">No sales</div></td>
+                <td>89</td>
+                <td><span class="cash-value" style="color:var(--violet)">$682</span></td>
+                <td><span class="vendor-name">Greenline Supply</span></td>
+                <td><span class="risk-pill risk-nosales">NO SALES</span></td>
+                <td><button class="btn btn-amber-outline">Review</button></td>
+              </tr>
+              <tr>
+                <td><span class="sku-code">SKU-1010</span></td>
+                <td>
+                  <div class="flex-row" style="margin-bottom:2px;">
+                    <div class="product-name" style="max-width:none">Holiday Gift Wrap Bundle</div>
+                    <span class="offseason-badge">Off-season</span>
+                  </div>
+                  <div class="deadstock-note">Off-season SKU. Confirm against your assortment calendar before marking down.</div>
+                </td>
+                <td><div class="days-cover-main" style="color:var(--violet)">1,791d</div></td>
+                <td>203</td>
+                <td><span class="cash-value" style="color:var(--violet)">$870</span></td>
+                <td><span class="vendor-name">Seasonal House</span></td>
+                <td><span class="risk-pill risk-deadstock">DEADSTOCK</span></td>
+                <td><button class="btn btn-amber-outline">Review</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="deadstock-summary">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"/></svg>
+          Total cash tied up in deadstock candidates: <strong>$2,296</strong>
+        </div>
+      </div><!-- /tab-deadstock -->
+
+      <!-- ============ TAB 4: SUPPLIER DRAFT ============ -->
+      <div id="tab-draft" class="tab-panel">
+        <div class="section-header">
+          <span class="section-title">Supplier Follow-up Draft</span>
+        </div>
+
+        <!-- SKU selector -->
+        <div class="sku-selector">
+          <button class="sku-tab-btn active" id="sku-btn-SKU-1004" onclick="selectDraftSku('SKU-1004')">SKU-1004</button>
+          <button class="sku-tab-btn" id="sku-btn-SKU-1001" onclick="selectDraftSku('SKU-1001')">SKU-1001</button>
+          <button class="sku-tab-btn" id="sku-btn-SKU-1007" onclick="selectDraftSku('SKU-1007')">SKU-1007</button>
+          <button class="sku-tab-btn" id="sku-btn-SKU-1002" onclick="selectDraftSku('SKU-1002')">SKU-1002</button>
+        </div>
+
+        <!-- Template indicator -->
+        <div class="template-row">
+          <span class="template-badge" id="template-badge">
+            <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+            Template: URGENT EXPEDITE
+          </span>
+          <button class="template-toggle" onclick="toggleDraftTemplate()" id="template-toggle-btn">Switch to standard reorder</button>
+        </div>
+
+        <!-- Draft card -->
+        <div class="draft-card">
+          <div class="draft-header">
+            <span class="draft-header-label">Email Draft</span>
+            <span style="font-size:11px;color:var(--text-muted)">Click body to edit</span>
+          </div>
+          <div class="draft-body" id="draft-body" contenteditable="true"></div>
+          <div class="draft-footer">
+            <span class="draft-note">Edit the draft before sending. Confirm vendor contact details.</span>
+            <button class="btn btn-copy" id="copy-btn" onclick="copyDraft()">
+              <svg class="btn-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M4 2h8a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V4a2 2 0 012-2zm0 1a1 1 0 00-1 1v8a1 1 0 001 1h8a1 1 0 001-1V4a1 1 0 00-1-1H4z"/><path d="M2 5h1v1H2V5zm0 2h1v1H2V7zm0 2h1v1H2V9z"/></svg>
+              Copy to Clipboard
+            </button>
+          </div>
+        </div>
+      </div><!-- /tab-draft -->
+
+      <!-- ============ TAB 5: FORMULAS ============ -->
+      <div id="tab-formulas" class="tab-panel">
+        <div class="section-header">
+          <span class="section-title">How the Calculations Work</span>
+        </div>
+
+        <div class="formula-list">
+          <div class="formula-card">
+            <div class="formula-num">1</div>
+            <div class="formula-content">
+              <div class="formula-name">Daily Demand Rate</div>
+              <div class="formula-expr">max(units_sold_30d ÷ 30, units_sold_90d ÷ 90)</div>
+              <div class="formula-desc">Takes the higher of the 30-day and 90-day daily averages to avoid underestimating demand when recent sales spike.</div>
+            </div>
+          </div>
+          <div class="formula-card">
+            <div class="formula-num">2</div>
+            <div class="formula-content">
+              <div class="formula-name">Available Inventory</div>
+              <div class="formula-expr">max(0, inventory_on_hand − committed_units)</div>
+              <div class="formula-desc">On-hand stock minus already-committed units. Floored at zero so negative committed counts don't inflate availability.</div>
+            </div>
+          </div>
+          <div class="formula-card">
+            <div class="formula-num">3</div>
+            <div class="formula-content">
+              <div class="formula-name">Effective Inventory</div>
+              <div class="formula-expr">available_inventory + incoming_units</div>
+              <div class="formula-desc">Adds any confirmed inbound shipments to available stock, giving a forward-looking count rather than a static snapshot.</div>
+            </div>
+          </div>
+          <div class="formula-card">
+            <div class="formula-num">4</div>
+            <div class="formula-content">
+              <div class="formula-name">Days of Cover</div>
+              <div class="formula-expr">effective_inventory ÷ demand_run_rate</div>
+              <div class="formula-desc">How many days the current effective inventory will last at the current demand rate. The primary risk signal.</div>
+            </div>
+          </div>
+          <div class="formula-card">
+            <div class="formula-num">5</div>
+            <div class="formula-content">
+              <div class="formula-name">Safety Buffer</div>
+              <div class="formula-expr">max(7, ⌈0.25 × lead_time_days⌉)</div>
+              <div class="formula-desc">At least 7 days, or 25% of lead time (whichever is larger). Provides a cushion for shipping delays and demand variability.</div>
+            </div>
+          </div>
+          <div class="formula-card">
+            <div class="formula-num">6</div>
+            <div class="formula-content">
+              <div class="formula-name">Stockout Risk Threshold</div>
+              <div class="formula-expr">lead_time_days + safety_buffer_days</div>
+              <div class="formula-desc">A SKU is flagged EXPEDITE when its days of cover falls below this threshold — meaning stock will run out before a reorder arrives.</div>
+            </div>
+          </div>
+          <div class="formula-card">
+            <div class="formula-num">7</div>
+            <div class="formula-content">
+              <div class="formula-name">Reorder Quantity</div>
+              <div class="formula-expr">max(0, (lead_time + 30) × demand − effective_inventory)</div>
+              <div class="formula-desc">Covers the lead time plus 30 days of forward demand, minus what you already have. Rounded up to MOQ.</div>
+            </div>
+          </div>
+          <div class="formula-card">
+            <div class="formula-num">8</div>
+            <div class="formula-content">
+              <div class="formula-name">Estimated Cash for Reorder</div>
+              <div class="formula-expr">reorder_qty × unit_cost</div>
+              <div class="formula-desc">Only calculated when unit_cost is present in the data. A planning estimate, not an invoice.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="caveat-section">
+          <div class="caveat-header">Important Caveats &amp; Edge Cases</div>
+          <ul class="caveat-list">
+            <li class="caveat-item">
+              <div class="caveat-trigger">
+                <span class="caveat-trigger-tag">Newly Active SKU</span>
+              </div>
+              <div class="caveat-explain">A SKU with fewer than 30 days of sales history may show inflated demand rates. Cross-check against manual counts or use 90-day figures if available.</div>
+            </li>
+            <li class="caveat-item">
+              <div class="caveat-trigger">
+                <span class="caveat-trigger-tag">Off-season</span>
+              </div>
+              <div class="caveat-explain">Seasonal products (e.g., holiday bundles) will show very high days-of-cover outside their season. These appear as deadstock candidates but are not necessarily distressed. Compare against your assortment calendar.</div>
+            </li>
+            <li class="caveat-item">
+              <div class="caveat-trigger">
+                <span class="caveat-trigger-tag">Verify Net of Returns</span>
+              </div>
+              <div class="caveat-explain">If your on-hand count includes returned but unsellable inventory, the effective inventory will be overstated. Confirm on-hand reflects only sellable units before placing reorders.</div>
+            </li>
+          </ul>
+          <div class="caveat-note">Bundles and kits are not exploded into components. This is a planning aid, not a forecast guarantee.</div>
+        </div>
+      </div><!-- /tab-formulas -->
+
+    </div><!-- /content-area -->
+  </div><!-- /main-area -->
+</div><!-- /app-shell -->
+
+<!-- ==================== MOBILE BOTTOM TAB BAR ==================== -->
+<div class="bottom-tabbar">
+  <button class="tab-bar-item active" id="mob-overview" onclick="switchTab('overview', this)">
+    <svg class="tab-bar-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 6a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zm10-1a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/></svg>
+    Overview
+  </button>
+  <button class="tab-bar-item" id="mob-stockout" onclick="switchTab('stockout', this)">
+    <div style="position:relative;display:inline-block">
+      <svg class="tab-bar-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+      <span class="tab-bar-badge">4</span>
+    </div>
+    Risk
+  </button>
+  <button class="tab-bar-item" id="mob-deadstock" onclick="switchTab('deadstock', this)">
+    <svg class="tab-bar-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z"/><path fill-rule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm5 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" clip-rule="evenodd"/></svg>
+    Deadstock
+  </button>
+  <button class="tab-bar-item" id="mob-draft" onclick="switchTab('draft', this)">
+    <svg class="tab-bar-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/></svg>
+    Draft
+  </button>
+  <button class="tab-bar-item" id="mob-formulas" onclick="switchTab('formulas', this)">
+    <svg class="tab-bar-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm2 10a1 1 0 10-2 0v3a1 1 0 102 0v-3zm2-3a1 1 0 011 1v5a1 1 0 11-2 0v-5a1 1 0 011-1zm4-1a1 1 0 10-2 0v7a1 1 0 102 0V8z" clip-rule="evenodd"/></svg>
+    Formulas
+  </button>
+</div>
+
+<!-- Back link -->
+<a href="../index.html" class="back-link">← Back to gallery</a>
+
+<!-- ==================== JAVASCRIPT ==================== -->
+<script>
+  // ===================== TAB SWITCHING =====================
+  const TAB_IDS = ['overview', 'stockout', 'deadstock', 'draft', 'formulas'];
+
+  function switchTab(tabId, clickedEl) {
+    // Hide all panels
+    TAB_IDS.forEach(id => {
+      document.getElementById('tab-' + id).classList.remove('active');
+    });
+
+    // Show target panel
+    document.getElementById('tab-' + tabId).classList.add('active');
+
+    // Update sidebar nav active state
+    document.querySelectorAll('.nav-item').forEach(el => {
+      el.classList.toggle('active', el.dataset.tab === tabId);
+    });
+
+    // Update mobile tab bar active state
+    document.querySelectorAll('.tab-bar-item').forEach(el => {
+      el.classList.remove('active');
+    });
+    const mobEl = document.getElementById('mob-' + tabId);
+    if (mobEl) mobEl.classList.add('active');
+  }
+
+  // ===================== DRAFT DATA =====================
+  const DRAFT_URGENT = {
+    'SKU-1004': `Subject: Urgent Expedite Request — Cotton Drawer Organizer (SKU-1004)
+
+Hi Northstar Home team,
+
+We have a critical inventory situation for Cotton Drawer Organizer (SKU-1004).
+
+Current situation:
+• On-hand: 6 units (2 available after 4 committed)
+• Days of cover: ~1 day
+• Standard lead time: 30 days
+• Projected days short: 29 days before next replenishment
+
+Request:
+• Quantity: 108 units (urgent)
+
+Please confirm:
+1. Fastest possible ship date
+2. Expedited / air freight options and cost
+3. Partial early shipment if available
+
+We risk stocking out within 24 hours. Please respond urgently.
+
+[Your name]
+[Your contact]`,
+
+    'SKU-1001': `Subject: Urgent Expedite Request — Bamboo Storage Bin - Small (SKU-1001)
+
+Hi Northstar Home team,
+
+We have a critical inventory situation for Bamboo Storage Bin - Small (SKU-1001).
+
+Current situation:
+• Days of cover: ~10.7 days
+• Standard lead time: 28 days
+• Projected days short: 17 days before next replenishment
+
+Request:
+• Quantity: 144 units (urgent)
+
+Please confirm:
+1. Fastest possible ship date
+2. Expedited / air freight options and cost
+3. Partial early shipment if available
+
+We risk stocking out before normal lead time allows replenishment. Please respond urgently.
+
+[Your name]
+[Your contact]`,
+
+    'SKU-1007': `Subject: Urgent Expedite Request — Glass Meal Prep Container 3pk (SKU-1007)
+
+Hi Blue Ridge Goods team,
+
+We have a critical inventory situation for Glass Meal Prep Container 3pk (SKU-1007).
+
+Current situation:
+• Days of cover: ~16.4 days
+• Standard lead time: 60 days
+• Projected days short: 44 days before next replenishment
+
+Request:
+• Quantity: 18 units (urgent)
+
+Please confirm:
+1. Fastest possible ship date
+2. Expedited / air freight options and cost
+3. Partial early shipment if available
+
+Our lead time significantly exceeds current stock levels. Please respond urgently.
+
+[Your name]
+[Your contact]`,
+
+    'SKU-1002': `Subject: Urgent Expedite Request — Bamboo Storage Bin - Large (SKU-1002)
+
+Hi Northstar Home team,
+
+We have a critical inventory situation for Bamboo Storage Bin - Large (SKU-1002).
+
+Current situation:
+• Days of cover: ~17.5 days
+• Standard lead time: 35 days
+• Projected days short: 18 days before next replenishment
+
+Request:
+• Quantity: 120 units (urgent)
+
+Please confirm:
+1. Fastest possible ship date
+2. Expedited / air freight options and cost
+3. Partial early shipment if available
+
+We risk stocking out before normal lead time allows replenishment. Please respond urgently.
+
+[Your name]
+[Your contact]`
+  };
+
+  const DRAFT_STANDARD = {
+    'SKU-1004': `Subject: Reorder Request — Cotton Drawer Organizer (SKU-1004)
+
+Hi Northstar Home team,
+
+We would like to place a standard reorder for Cotton Drawer Organizer (SKU-1004).
+
+Order details:
+• Quantity: 108 units
+• Vendor: Northstar Home
+
+Please confirm availability and estimated ship date at your earliest convenience.
+
+[Your name]
+[Your contact]`,
+
+    'SKU-1001': `Subject: Reorder Request — Bamboo Storage Bin - Small (SKU-1001)
+
+Hi Northstar Home team,
+
+We would like to place a standard reorder for Bamboo Storage Bin - Small (SKU-1001).
+
+Order details:
+• Quantity: 144 units
+• Vendor: Northstar Home
+
+Please confirm availability and estimated ship date at your earliest convenience.
+
+[Your name]
+[Your contact]`,
+
+    'SKU-1007': `Subject: Reorder Request — Glass Meal Prep Container 3pk (SKU-1007)
+
+Hi Blue Ridge Goods team,
+
+We would like to place a standard reorder for Glass Meal Prep Container 3pk (SKU-1007).
+
+Order details:
+• Quantity: 18 units
+• Vendor: Blue Ridge Goods
+
+Please confirm availability and estimated ship date at your earliest convenience.
+
+[Your name]
+[Your contact]`,
+
+    'SKU-1002': `Subject: Reorder Request — Bamboo Storage Bin - Large (SKU-1002)
+
+Hi Northstar Home team,
+
+We would like to place a standard reorder for Bamboo Storage Bin - Large (SKU-1002).
+
+Order details:
+• Quantity: 120 units
+• Vendor: Northstar Home
+
+Please confirm availability and estimated ship date at your earliest convenience.
+
+[Your name]
+[Your contact]`
+  };
+
+  let currentDraftSku = 'SKU-1004';
+  let isUrgentTemplate = true;
+
+  function selectDraftSku(sku) {
+    currentDraftSku = sku;
+
+    // Update SKU tab buttons
+    document.querySelectorAll('.sku-tab-btn').forEach(btn => {
+      btn.classList.remove('active');
+    });
+    const btn = document.getElementById('sku-btn-' + sku);
+    if (btn) btn.classList.add('active');
+
+    // Update draft body
+    renderDraft();
+  }
+
+  function renderDraft() {
+    const drafts = isUrgentTemplate ? DRAFT_URGENT : DRAFT_STANDARD;
+    const bodyEl = document.getElementById('draft-body');
+    bodyEl.textContent = drafts[currentDraftSku] || '';
+  }
+
+  function toggleDraftTemplate() {
+    isUrgentTemplate = !isUrgentTemplate;
+    const badge = document.getElementById('template-badge');
+    const toggleBtn = document.getElementById('template-toggle-btn');
+
+    if (isUrgentTemplate) {
+      badge.innerHTML = `<svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg> Template: URGENT EXPEDITE`;
+      badge.style.background = '#FEE2E2';
+      badge.style.borderColor = '#FECACA';
+      badge.style.color = 'var(--red)';
+      toggleBtn.textContent = 'Switch to standard reorder';
+    } else {
+      badge.innerHTML = `<svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/><path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/></svg> Template: STANDARD REORDER`;
+      badge.style.background = '#DBEAFE';
+      badge.style.borderColor = '#BFDBFE';
+      badge.style.color = '#1E40AF';
+      toggleBtn.textContent = 'Switch to urgent expedite';
+    }
+
+    renderDraft();
+  }
+
+  function copyDraft() {
+    const bodyEl = document.getElementById('draft-body');
+    const text = bodyEl.textContent || bodyEl.innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = document.getElementById('copy-btn');
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.innerHTML = `<svg class="btn-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M4 2h8a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V4a2 2 0 012-2zm0 1a1 1 0 00-1 1v8a1 1 0 001 1h8a1 1 0 001-1V4a1 1 0 00-1-1H4z"/><path d="M2 5h1v1H2V5zm0 2h1v1H2V7zm0 2h1v1H2V9z"/></svg> Copy to Clipboard`;
+        btn.classList.remove('copied');
+      }, 2000);
+    }).catch(() => {
+      // Fallback
+      const range = document.createRange();
+      range.selectNode(bodyEl);
+      window.getSelection().removeAllRanges();
+      window.getSelection().addRange(range);
+      document.execCommand('copy');
+      window.getSelection().removeAllRanges();
+      const btn = document.getElementById('copy-btn');
+      btn.textContent = 'Copied!';
+      setTimeout(() => {
+        btn.innerHTML = `<svg class="btn-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M4 2h8a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V4a2 2 0 012-2zm0 1a1 1 0 00-1 1v8a1 1 0 001 1h8a1 1 0 001-1V4a1 1 0 00-1-1H4z"/><path d="M2 5h1v1H2V5zm0 2h1v1H2V7zm0 2h1v1H2V9z"/></svg> Copy to Clipboard`;
+      }, 2000);
+    });
+  }
+
+  // ===================== LEAD TIME INLINE EDIT =====================
+  function startEditLt(spanEl) {
+    if (spanEl.dataset.editing) return;
+    spanEl.dataset.editing = 'true';
+
+    const currentVal = parseInt(spanEl.textContent) || 30;
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.value = currentVal;
+    input.className = 'lead-time-input';
+    input.min = 1;
+    input.max = 365;
+
+    spanEl.replaceWith(input);
+    input.focus();
+    input.select();
+
+    function commit() {
+      const newVal = parseInt(input.value) || currentVal;
+      const newSpan = document.createElement('span');
+      newSpan.className = 'lead-time-val';
+      newSpan.textContent = newVal + 'd';
+      newSpan.title = 'Click to edit';
+      newSpan.onclick = function() { startEditLt(this); };
+      input.replaceWith(newSpan);
+    }
+
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      if (e.key === 'Escape') {
+        const newSpan = document.createElement('span');
+        newSpan.className = 'lead-time-val';
+        newSpan.textContent = currentVal + 'd';
+        newSpan.title = 'Click to edit';
+        newSpan.onclick = function() { startEditLt(this); };
+        input.replaceWith(newSpan);
+      }
+    });
+  }
+
+  // ===================== INIT =====================
+  document.addEventListener('DOMContentLoaded', () => {
+    renderDraft();
+  });
+</script>
+
+</body>
+</html>
